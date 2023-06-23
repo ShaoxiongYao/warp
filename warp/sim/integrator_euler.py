@@ -191,9 +191,9 @@ def eval_triangles(
     v10 = v1 - v0
     v20 = v2 - v0
 
-    Dm = pose[tid]
+    inv_Dm = pose[tid]
 
-    inv_rest_area = wp.determinant(Dm) * 2.0  # 1 / det(A) = det(A^-1)
+    inv_rest_area = wp.determinant(inv_Dm) * 2.0  # 1 / det(A) = det(A^-1)
     rest_area = 1.0 / inv_rest_area
 
     # scale stiffness coefficients to account for area
@@ -202,12 +202,12 @@ def eval_triangles(
     k_damp = k_damp * rest_area
 
     # F = Xs*Xm^-1
-    F1 = x10 * Dm[0, 0] + x20 * Dm[1, 0]
-    F2 = x10 * Dm[0, 1] + x20 * Dm[1, 1]
+    F1 = x10 * inv_Dm[0, 0] + x20 * inv_Dm[1, 0]
+    F2 = x10 * inv_Dm[0, 1] + x20 * inv_Dm[1, 1]
 
     # dFdt = Vs*Xm^-1
-    dFdt1 = v10 * Dm[0, 0] + v20 * Dm[1, 0]
-    dFdt2 = v10 * Dm[0, 1] + v20 * Dm[1, 1]
+    dFdt1 = v10 * inv_Dm[0, 0] + v20 * inv_Dm[1, 0]
+    dFdt2 = v10 * inv_Dm[0, 1] + v20 * inv_Dm[1, 1]
 
     # deviatoric PK1 + damping term
     P1 = F1 * k_mu + dFdt1 * k_damp
@@ -248,8 +248,8 @@ def eval_triangles(
     # Neo-Hookean (with rest stability)
 
     # force = P*Dm'
-    f1 = P1 * Dm[0, 0] + P2 * Dm[0, 1]
-    f2 = P1 * Dm[1, 0] + P2 * Dm[1, 1]
+    f1 = P1 * inv_Dm[0, 0] + P2 * inv_Dm[0, 1]
+    f2 = P1 * inv_Dm[1, 0] + P2 * inv_Dm[1, 1]
     alpha = 1.0 + k_mu / k_lambda
 
     # -----------------------------
@@ -274,7 +274,7 @@ def eval_triangles(
     # -----------------------------
     # Area Damping
 
-    dcdt = dot(dcdq, v1) + dot(dcdr, v2) - dot(dcdq + dcdr, v0)
+    dcdt = wp.dot(dcdq, v1) + wp.dot(dcdr, v2) - wp.dot(dcdq + dcdr, v0)
     f_damp = k_damp * dcdt
 
     f1 = f1 + dcdq * (f_area + f_damp)
@@ -666,7 +666,7 @@ def eval_tetrahedra(
     # -----------------------------
     # Neo-Hookean (with rest stability [Smith et al 2018])
 
-    Ic = dot(col1, col1) + dot(col2, col2) + dot(col3, col3)
+    Ic = wp.dot(col1, col1) + wp.dot(col2, col2) + wp.dot(col3, col3)
 
     # deviatoric part
     P = F * k_mu * (1.0 - 1.0 / (Ic + 1.0)) + dFdt * k_damp
