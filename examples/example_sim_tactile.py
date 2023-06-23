@@ -84,6 +84,7 @@ class Example:
         input()
 
         self.integrator = wp.sim.SemiImplicitIntegrator()
+        # self.integrator = wp.sim.XPBDIntegrator()
 
         self.state_0 = self.model.state()
         self.state_1 = self.model.state()
