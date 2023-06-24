@@ -15,7 +15,7 @@ view_params = {
 
 if __name__ == '__main__':
 
-    out_dir = "/media/motion/8AF1-B496/warp_data/seq_1687571415"
+    out_dir = "/media/motion/8AF1-B496/warp_data/seq_1687619819"
 
     q_fn_lst = sorted(glob.glob(out_dir + '/particle_q_*.npy'))
     qd_fn_lst = sorted(glob.glob(out_dir + '/particle_qd_*.npy'))
@@ -36,7 +36,6 @@ if __name__ == '__main__':
         q = np.load(q_fn)
         qd = np.load(qd_fn)
         f = np.load(f_fn)
-        print("f:", f)
         cid = np.load(cid_fn)
 
         if prev_qd is not None:
@@ -48,7 +47,7 @@ if __name__ == '__main__':
         nz_cid = cid[cid != 0]
         print("number of contacts:", nz_cid.shape[0])
 
-        if sim_time > 20.0:
+        if sim_time >= 0.0:
             if nz_cid.shape[0] != 0:
                 tot_f_lst.append(f[nz_cid, :].sum(axis=0))
             else:
