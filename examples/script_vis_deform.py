@@ -4,6 +4,7 @@ import glob
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+from touch_utils import TouchSeq
 
 view_params = {    
     "front" : [ 0.52760563961593143, 0.48244076633819, 0.6992018278154627 ],
@@ -13,33 +14,24 @@ view_params = {
     "point_show_normal": True
 }
 
+
 if __name__ == '__main__':
 
-    out_dir = "/media/motion/8AF1-B496/warp_data/seq_1687626366"
-
-    q_fn_lst = sorted(glob.glob(out_dir + '/particle_q_*.npy'))
-    qd_fn_lst = sorted(glob.glob(out_dir + '/particle_qd_*.npy'))
-    f_fn_lst = sorted(glob.glob(out_dir + '/particle_f_*.npy'))
-    cid_fn_lst = sorted(glob.glob(out_dir + '/contact_particle_*.npy'))
+    touch_seq = TouchSeq(seq_id=1687638908)
 
     coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
 
-    sim_time_lst = []
+    sim_time_lst = touch_seq.sim_time_lst
 
     prev_qd = None
     change_qd_lst = []
 
     tot_f_lst = []
 
-    for idx, (q_fn, qd_fn, f_fn, cid_fn) in enumerate(zip(q_fn_lst, qd_fn_lst, f_fn_lst, cid_fn_lst)):
-        sim_time = float(q_fn.split('/')[-1][len('particle_q_'):-len('.npy')])
-        print("sim time:", sim_time)
-        sim_time_lst.append(sim_time)
 
-        q = np.load(q_fn)
-        qd = np.load(qd_fn)
-        f = np.load(f_fn)
-        cid = np.load(cid_fn)
+    for idx in range(len(touch_seq)):
+
+        sim_time, q, qd, f, cid = touch_seq.load(idx)
 
         if prev_qd is not None:
             change_qd = np.linalg.norm(qd-prev_qd)
