@@ -87,7 +87,8 @@ class Example:
         self.state_0 = self.model.state()
         self.state_1 = self.model.state()
 
-        self.renderer = wp.sim.render.SimRenderer(self.model, stage, scaling=40.0)
+        self.renderer = wp.sim.render.SimRendererOpenGL(self.model, stage, scaling=1.0)
+        # self.renderer = wp.sim.render.SimRenderer(self.model, stage, scaling=40.0)
 
         if self.sim_use_graph:
             # create update graph
