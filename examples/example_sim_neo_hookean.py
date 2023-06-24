@@ -16,6 +16,7 @@
 import os
 import math
 
+import numpy as np
 import warp as wp
 import warp.sim
 import warp.sim.render
@@ -42,7 +43,7 @@ class Example:
 
         builder = wp.sim.ModelBuilder()
 
-        cell_dim = 15
+        cell_dim = 1
         cell_size = 2.0 / cell_dim
 
         center = cell_size * cell_dim * 0.5
@@ -69,7 +70,8 @@ class Example:
         self.model.ground = False
         self.model.gravity[1] = 0.0
 
-        self.integrator = wp.sim.SemiImplicitIntegrator()
+        # self.integrator = wp.sim.SemiImplicitIntegrator()
+        self.integrator = wp.sim.XPBDIntegrator()
 
         self.rest = self.model.state()
         self.rest_vol = (cell_size * cell_dim) ** 3
@@ -80,6 +82,8 @@ class Example:
         self.volume = wp.zeros(1, dtype=wp.float32)
 
         self.renderer = wp.sim.render.SimRenderer(self.model, stage, scaling=20.0)
+
+        self.step_count = 0
 
     def update(self):
         with wp.ScopedTimer("simulate"):
@@ -109,6 +113,8 @@ class Example:
                 dim=self.model.tet_count,
                 inputs=[self.state_0.particle_q, self.model.tet_indices, self.volume],
             )
+        
+            self.step_count += 1
 
     def render(self, is_live=False):
         with wp.ScopedTimer("render"):
