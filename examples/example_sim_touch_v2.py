@@ -18,12 +18,13 @@ import os
 import warp as wp
 import warp.sim
 import warp.sim.render
+from touch_utils import compute_contact_forces, TouchSeq
 
 wp.init()
 
 
 class Example:
-    def __init__(self, stage):
+    def __init__(self, stage, touch_seq: TouchSeq):
         self.sim_width = 8
         self.sim_height = 8
 
@@ -71,6 +72,7 @@ class Example:
         self.state_1 = self.model.state()
 
         self.renderer = wp.sim.render.SimRendererOpenGL(self.model, stage, scaling=1.0)
+        self.touch_seq = touch_seq
 
     def update(self):
         with wp.ScopedTimer("simulate", active=True):
@@ -90,6 +92,11 @@ class Example:
 
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
+            
+            # NOTE: state_0 current state, state_1 output state
+            compute_contact_forces(self.model, self.state_0, self.state_1)
+            
+            self.touch_seq.save(self.sim_time, self.model, self.state_1)
 
     def render(self, is_live=False):
         with wp.ScopedTimer("render", active=True):
@@ -103,9 +110,12 @@ class Example:
 if __name__ == "__main__":
     stage_path = os.path.join(os.path.dirname(__file__), "outputs/example_sim_rigid_fem.usd")
 
-    example = Example(stage_path)
+    touch_seq = TouchSeq()
+    example = Example(stage_path, touch_seq)
 
     for i in range(example.sim_frames):
         example.update()
         example.render()
+    
+    example.touch_seq.end_seq()
 
