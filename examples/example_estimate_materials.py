@@ -1,11 +1,17 @@
 import warp as wp
 import warp.sim
 import numpy as np
-from wp_utils import loss_l2
 from example_sim_grid_deform import eval_linear_tetrahedra
 import matplotlib.pyplot as plt
 
 wp.init()
+
+@wp.kernel
+def loss_l2(ary1: wp.array(dtype=wp.vec3f), ary2: wp.array(dtype=wp.vec3f), loss: wp.array(dtype=wp.float32)):
+    i = wp.tid()
+    diff = ary1[i] - ary2[i]
+    l = wp.dot(diff, diff)
+    wp.atomic_add(loss, 0, l)
 
 def setup_model(cell_dim=1):
     builder = wp.sim.ModelBuilder()
