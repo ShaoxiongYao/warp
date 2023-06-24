@@ -48,10 +48,11 @@ if __name__ == '__main__':
         nz_cid = cid[cid != 0]
         print("number of contacts:", nz_cid.shape[0])
 
-        if nz_cid.shape[0] != 0:
-            tot_f_lst.append(f[nz_cid, :].sum(axis=0))
-        else:
-            tot_f_lst.append(np.zeros(3))
+        if sim_time > 20.0:
+            if nz_cid.shape[0] != 0:
+                tot_f_lst.append(f[nz_cid, :].sum(axis=0))
+            else:
+                tot_f_lst.append(np.zeros(3))
 
         # if idx % 30 == 0:
         #     pcd = o3d.geometry.PointCloud()
