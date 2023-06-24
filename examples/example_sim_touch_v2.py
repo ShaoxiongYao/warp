@@ -18,6 +18,7 @@ import os
 import warp as wp
 import warp.sim
 import warp.sim.render
+import numpy as np
 from touch_utils import compute_contact_forces, TouchSeq
 
 wp.init()
@@ -76,9 +77,17 @@ class Example:
 
     def update(self):
         with wp.ScopedTimer("simulate", active=True):
-            if self.sim_time <= 10.0:
+            if self.sim_time <= 1.0:
                 self.state_0.body_q.assign(
-                    [[0.5, 2.5-self.sim_time/10.0, 0.5, 0., 0., 0., 1.]]
+                    [[0.5, 2.5-0.75*self.sim_time, 0.5, 0., 0., 0., 1.]]
+                )
+            elif self.sim_time <= 10.0:
+                self.state_0.body_q.assign(
+                    [[0.5, 1.75-0.25*(self.sim_time-1.0)/10.0, 0.5, 0., 0., 0., 1.]]
+                )
+            else:
+                self.state_0.body_q.assign(
+                    [[0.5, 1.75-0.25*9.0/10.0, 0.5, 0., 0., 0., 1.]]
                 )
 
             for s in range(self.sim_substeps):
