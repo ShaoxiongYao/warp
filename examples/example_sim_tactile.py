@@ -25,7 +25,7 @@ import numpy as np
 wp.init()
 
 out_dir = "/media/motion/8AF1-B496/warp_data"
-out_dir = out_dir + f'seq_{int(time.time())}'
+out_dir = out_dir + f'/seq_{int(time.time())}'
 pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
 
 class Example:
@@ -35,12 +35,10 @@ class Example:
 
         self.sim_fps = 60.0
         self.sim_substeps = 32
-        self.sim_duration = 5.0
+        self.sim_duration = 40.0
         self.sim_frames = int(self.sim_duration * self.sim_fps)
         self.sim_dt = (1.0 / self.sim_fps) / self.sim_substeps
         self.sim_time = 0.0
-        self.sim_iterations = 1
-        self.sim_relaxation = 1.0
 
         builder = wp.sim.ModelBuilder()
 
@@ -54,10 +52,10 @@ class Example:
             cell_x=0.1,
             cell_y=0.1,
             cell_z=0.1,
-            density=100.0,
+            density=100000.0,
             k_mu=50000.0,
             k_lambda=20000.0,
-            k_damp=100.0,
+            k_damp=1000.0,
             fix_bottom=True
         )
 
@@ -68,7 +66,7 @@ class Example:
         self.model.ground = True
         self.model.soft_contact_distance = 0.01
         self.model.soft_contact_ke = 1.0e3
-        self.model.soft_contact_kd = 0.0
+        self.model.soft_contact_kd = 100.0
         self.model.soft_contact_kf = 1.0e3
 
         print("collision pairs:", self.model.shape_contact_pairs)
@@ -80,8 +78,7 @@ class Example:
         print("body q:", self.model.body_q)
 
         np.save('outputs/particle_q.npy', self.model.particle_q.numpy())
-        # self.model.gravity = wp.vec3([0.0, 0.0, 0.0])
-        input()
+        self.model.gravity = wp.vec3([0.0, 0.0, 0.0])
 
         self.integrator = wp.sim.SemiImplicitIntegrator()
         # self.integrator = wp.sim.XPBDIntegrator()
@@ -93,30 +90,31 @@ class Example:
 
     def update(self):
         with wp.ScopedTimer("simulate", active=True):
+            print("sim time:", self.sim_time)
+
+            if self.sim_time <= 4.0:
+                self.state_0.body_q.assign(
+                    [[0.5, 2.5-self.sim_time/5.0, 0.5, 0., 0., 0., 1.]]
+                )
+
             for s in range(self.sim_substeps):
                 wp.sim.collide(self.model, self.state_0)
                 if s == 0:
                     print("number of contacts:", self.model.soft_contact_count)
-                    print("sim time:", self.sim_time)
 
                 self.state_0.clear_forces()
                 self.state_1.clear_forces()
 
-                self.state_0.body_q.assign(
-                    [[0.5, 2.5-self.sim_time/3.0, 0.5, 0., 0., 0., 1.]]
-                )
-
                 self.integrator.simulate(self.model, self.state_0, self.state_1, self.sim_dt)
                 self.sim_time += self.sim_dt
 
-                if s == self.sim_substeps - 1:
-                    np.save(out_dir + f'/particle_q_{self.sim_time:03f}.npy', self.state_0.particle_q.numpy())
-                    np.save(out_dir + f'/particle_f_{self.sim_time:03f}.npy', self.state_0.particle_f.numpy())
-
-                # print("state 0 forces shape:", self.state_0.particle_f.shape)
-
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
+            
+            np.save(out_dir + f'/particle_q_{self.sim_time:07.3f}.npy', self.state_1.particle_q.numpy())
+            np.save(out_dir + f'/particle_qd_{self.sim_time:07.3f}.npy', self.state_1.particle_qd.numpy())
+            np.save(out_dir + f'/particle_f_{self.sim_time:07.3f}.npy', self.state_1.particle_f.numpy())
+            np.save(out_dir + f'/contact_particle_{self.sim_time:07.3f}.npy', self.model.soft_contact_particle.numpy())
 
     def render(self, is_live=False):
         with wp.ScopedTimer("render", active=True):
