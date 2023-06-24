@@ -68,6 +68,11 @@ int is_cutlass_enabled()
     return int(WP_ENABLE_CUTLASS);
 }
 
+int is_debug_enabled()
+{
+    return int(WP_ENABLE_DEBUG);
+}
+
 void* alloc_host(size_t s)
 {
     return malloc(s);
@@ -104,27 +109,6 @@ void memtile_host(void* dest, void *src, size_t srcsize, size_t n)
         memcpy(dest,src,srcsize);
         dest = (char*)dest + srcsize;
     }
-}
-
-void array_inner_host(uint64_t a, uint64_t b, uint64_t out, int len)
-{
-    const float* ptr_a = (const float*)(a);
-    const float* ptr_b = (const float*)(b);
-    float* ptr_out = (float*)(out);
-
-    *ptr_out = 0.0f;
-    for (int i=0; i < len; ++i)
-        *ptr_out += ptr_a[i]*ptr_b[i];
-}
-
-void array_sum_host(uint64_t a, uint64_t out, int len)
-{
-    const float* ptr_a = (const float*)(a);
-    float* ptr_out = (float*)(out);
-
-    *ptr_out = 0.0f;
-    for (int i=0; i < len; ++i)
-        *ptr_out += ptr_a[i];
 }
 
 void array_scan_int_host(uint64_t in, uint64_t out, int len, bool inclusive)
@@ -176,7 +160,9 @@ WP_API size_t array_copy_host(void* dst, void* src, int dst_type, int src_type, 
         return 0;
 
     const void* src_data = NULL;
+    const void* src_grad = NULL;
     void* dst_data = NULL;
+    void* dst_grad = NULL;
     int src_ndim = 0;
     int dst_ndim = 0;
     const int* src_shape = NULL;
@@ -192,6 +178,7 @@ WP_API size_t array_copy_host(void* dst, void* src, int dst_type, int src_type, 
     {
         const wp::array_t<void>& src_arr = *static_cast<const wp::array_t<void>*>(src);
         src_data = src_arr.data;
+        src_grad = src_arr.grad;
         src_ndim = src_arr.ndim;
         src_shape = src_arr.shape.dims;
         src_strides = src_arr.strides;
@@ -216,6 +203,7 @@ WP_API size_t array_copy_host(void* dst, void* src, int dst_type, int src_type, 
     {
         const wp::array_t<void>& dst_arr = *static_cast<const wp::array_t<void>*>(dst);
         dst_data = dst_arr.data;
+        dst_grad = dst_arr.grad;
         dst_ndim = dst_arr.ndim;
         dst_shape = dst_arr.shape.dims;
         dst_strides = dst_arr.strides;
@@ -242,6 +230,7 @@ WP_API size_t array_copy_host(void* dst, void* src, int dst_type, int src_type, 
         return 0;
     }
 
+    bool has_grad = (src_grad && dst_grad);
     size_t n = 1;
 
     for (int i = 0; i < src_ndim; i++)
@@ -258,6 +247,14 @@ WP_API size_t array_copy_host(void* dst, void* src, int dst_type, int src_type, 
               dst_strides, src_strides,
               dst_indices, src_indices,
               src_shape, src_ndim, elem_size);
+
+    if (has_grad)
+    {
+        array_copy_nd(dst_grad, src_grad,
+                dst_strides, src_strides,
+                dst_indices, src_indices,
+                src_shape, src_ndim, elem_size);
+    }
 
     return n;
 }
@@ -379,9 +376,13 @@ WP_API size_t cuda_launch_kernel(void* context, void* kernel, size_t dim, void**
 WP_API void cuda_set_context_restore_policy(bool always_restore) {}
 WP_API int cuda_get_context_restore_policy() { return false; }
 
-WP_API void array_inner_device(uint64_t a, uint64_t b, uint64_t out, int len) {}
-WP_API void array_sum_device(uint64_t a, uint64_t out, int len) {}
 WP_API void array_scan_int_device(uint64_t in, uint64_t out, int len, bool inclusive) {}
 WP_API void array_scan_float_device(uint64_t in, uint64_t out, int len, bool inclusive) {}
+
+WP_API void cuda_graphics_map(void* context, void* resource) {}
+WP_API void cuda_graphics_unmap(void* context, void* resource) {}
+WP_API void cuda_graphics_device_ptr_and_size(void* context, void* resource, uint64_t* ptr, size_t* size) {}
+WP_API void* cuda_graphics_register_gl_buffer(void* context, uint32_t gl_buffer, unsigned int flags) { return NULL; }
+WP_API void cuda_graphics_unregister_resource(void* context, void* resource) {}
 
 #endif // !WP_ENABLE_CUDA
