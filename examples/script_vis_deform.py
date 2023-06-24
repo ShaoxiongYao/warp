@@ -15,7 +15,7 @@ view_params = {
 
 if __name__ == '__main__':
 
-    out_dir = "/media/motion/8AF1-B496/warp_data/seq_1687619819"
+    out_dir = "/media/motion/8AF1-B496/warp_data/seq_1687626366"
 
     q_fn_lst = sorted(glob.glob(out_dir + '/particle_q_*.npy'))
     qd_fn_lst = sorted(glob.glob(out_dir + '/particle_qd_*.npy'))
@@ -23,6 +23,8 @@ if __name__ == '__main__':
     cid_fn_lst = sorted(glob.glob(out_dir + '/contact_particle_*.npy'))
 
     coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+
+    sim_time_lst = []
 
     prev_qd = None
     change_qd_lst = []
@@ -32,6 +34,7 @@ if __name__ == '__main__':
     for idx, (q_fn, qd_fn, f_fn, cid_fn) in enumerate(zip(q_fn_lst, qd_fn_lst, f_fn_lst, cid_fn_lst)):
         sim_time = float(q_fn.split('/')[-1][len('particle_q_'):-len('.npy')])
         print("sim time:", sim_time)
+        sim_time_lst.append(sim_time)
 
         q = np.load(q_fn)
         qd = np.load(qd_fn)
@@ -65,10 +68,12 @@ if __name__ == '__main__':
 
         #     o3d.visualization.draw_geometries([coord_frame, pcd], **view_params)
     
-    # plt.plot(change_qd_lst)
-    # plt.show()
+    plt.plot(sim_time_lst[1:], change_qd_lst, label=r'$\Delta ||v||$')
+    plt.legend()
+    plt.show()
 
     for i, n in enumerate(['x', 'y', 'z']):
-        plt.plot([tot_f[i] for tot_f in tot_f_lst], label=f'f{n}')
+        plt.plot(sim_time_lst[-len(tot_f_lst):],
+                 [tot_f[i] for tot_f in tot_f_lst], label=f'f{n}')
     plt.legend()
     plt.show()
