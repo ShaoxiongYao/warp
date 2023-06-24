@@ -93,9 +93,38 @@ def eval_linear_tetrahedra(
     wp.atomic_sub(f, k, f2)
     wp.atomic_sub(f, l, f3)
 
+@wp.kernel
+def quasi_static_move_particles(
+    x: wp.array(dtype=wp.vec3),
+    f: wp.array(dtype=wp.vec3),
+    w: wp.array(dtype=float),
+    gravity: wp.vec3,
+    dt: float,
+    x_new: wp.array(dtype=wp.vec3),
+):
+    tid = wp.tid()
+
+    x0 = x[tid]
+    f0 = f[tid]
+
+    inv_mass = w[tid]
+
+    # simple semi-implicit Euler. v1 = v0 + a dt, x1 = x0 + v1 dt
+    x1 = x0 + (f0 * inv_mass + gravity * wp.step(0.0 - inv_mass)) * dt
+
+    x_new[tid] = x1
+
+@wp.kernel
+def weight_loss_l2(x: wp.array(dtype=wp.vec3), w: wp.array(dtype=float), loss: wp.array(dtype=float)):
+    tid = wp.tid()
+    
+    wx_i = w[tid]*x[tid]
+    x_i_l2 = wp.dot(wx_i, wx_i)
+
+    wp.atomic_add(loss, 0, x_i_l2)
 
 class Example:
-    def __init__(self, stage, states_path):
+    def __init__(self, stage_path, states_path):
         self.sim_width = 8
         self.sim_height = 8
 
@@ -130,7 +159,7 @@ class Example:
             cell_z=cell_size,
             density=100.0,
             fix_bottom=True,
-            fix_top=True,
+            fix_top=False,
             k_mu=1000.0,
             k_lambda=5000.0,
             k_damp=0.0,
@@ -150,12 +179,66 @@ class Example:
 
         self.volume = wp.zeros(1, dtype=wp.float32)
 
-        self.renderer = wp.sim.render.SimRenderer(self.model, stage, scaling=20.0)
+        self.renderer = wp.sim.render.SimRenderer(self.model, stage_path, scaling=20.0)
 
         self.step_count = 0
         self.states_path = states_path
 
         self.save_states(self.state_0, 'init')
+
+    def quasi_static_update(self, move_i, move_u):
+        with wp.ScopedTimer("simulate"):
+
+            move_i = wp.from_numpy(move_i, dtype=int, device=self.model.device)
+            move_u = wp.from_numpy(move_u, dtype=wp.vec3, device=self.model.device)
+
+            wp.launch(
+                kernel=self.move_points,
+                dim=len(move_i),
+                inputs=[move_i, move_u, self.state_0.particle_q],
+            )
+
+            for s in range(self.sim_substeps):
+                self.state_0.clear_forces()
+                self.state_1.clear_forces()
+
+                wp.launch(
+                    kernel=eval_linear_tetrahedra,
+                    dim=self.model.tet_count,
+                    inputs=[
+                        self.state_0.particle_q,
+                        self.model.tet_indices,
+                        self.model.tet_poses,
+                        self.model.tet_materials,
+                    ],
+                    outputs=[self.state_0.particle_f],
+                    device=self.model.device,
+                )
+
+                f_res_norm = np.linalg.norm(self.state_0.particle_f.numpy())
+                print(f"step {s}:", f_res_norm)
+
+                wp.launch(
+                    kernel=quasi_static_move_particles,
+                    dim=len(self.state_0.particle_q),
+                    inputs=[
+                        self.state_0.particle_q,
+                        self.state_0.particle_f,
+                        self.model.particle_inv_mass,
+                        self.model.gravity,
+                        0.01,
+                    ],
+                    outputs=[self.state_1.particle_q],
+                    device=self.model.device,
+                )
+
+                self.sim_time += self.sim_dt
+
+                # swap states
+                (self.state_0, self.state_1) = (self.state_1, self.state_0)
+
+            self.save_states(self.state_1, self.step_count)
+            self.step_count += 1
 
     def update(self):
         with wp.ScopedTimer("simulate"):
@@ -246,6 +329,18 @@ class Example:
         # twist the top layer of particles in the beam
         if m == 0 and p[1] != 0.0:
             points[tid] = wp.transform_point(xform, r)
+    
+    @wp.kernel
+    def move_points(
+        move_i: wp.array(dtype=int), move_u: wp.array(dtype=wp.vec3), points: wp.array(dtype=wp.vec3) 
+    ):
+        tid = wp.tid()
+
+        i = move_i[tid]
+        u = move_u[tid]
+
+        points[i] = points[i] + u
+
 
     @wp.kernel
     def compute_volume(points: wp.array(dtype=wp.vec3), indices: wp.array2d(dtype=int), volume: wp.array(dtype=float)):
@@ -271,15 +366,19 @@ class Example:
 
 
 if __name__ == "__main__":
-    stage_path = os.path.join(os.path.dirname(__file__), "outputs/example_sim_neo_hookean.usd")
+    stage_path = os.path.join(os.path.dirname(__file__), "outputs/example_sim_grid_deform.usd")
     time_id = int(time.time())
     states_path = os.path.join(os.path.dirname(__file__), f"outputs/box_deform_{time_id}")
     Path(states_path).mkdir(parents=True, exist_ok=True)
 
     example = Example(stage_path, states_path)
 
-    for i in range(example.sim_frames):
-        example.update()
+    move_i = np.array([0])
+    move_u = np.array([[0.0, 0.0, 0.001]])
+    for i in range(1):
+        # example.update()
+        example.quasi_static_update(move_i, move_u)
         example.render()
 
     example.renderer.save()
+    print("saved states path:", states_path)
