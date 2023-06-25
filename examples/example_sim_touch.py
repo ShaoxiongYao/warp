@@ -38,7 +38,7 @@ class Example:
         self.sim_iterations = 1
         self.sim_relaxation = 1.0
 
-        builder = wp.sim.ModelBuilder()
+        builder = wp.sim.ModelBuilder(gravity=0.0)
         builder.default_particle_radius = 0.01
 
         builder.add_soft_grid(
@@ -52,7 +52,7 @@ class Example:
             cell_y=0.1,
             cell_z=0.1,
             density=100.0,
-            k_mu=50000.0,
+            k_mu=10000.0,
             k_lambda=20000.0,
             k_damp=10.0,
             fix_bottom=True
