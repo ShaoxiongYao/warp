@@ -38,7 +38,7 @@ class Example:
         self.sim_iterations = 1
         self.sim_relaxation = 1.0
 
-        builder = wp.sim.ModelBuilder()
+        builder = wp.sim.ModelBuilder(gravity=0.0)
         builder.default_particle_radius = 0.01
 
         builder.add_soft_grid(
@@ -54,7 +54,7 @@ class Example:
             density=100.0,
             k_mu=500000.0,
             k_lambda=200000.0,
-            k_damp=100.0,
+            k_damp=10000.0,
             fix_bottom=True
         )
 
@@ -64,10 +64,11 @@ class Example:
         self.model = builder.finalize()
         self.model.ground = True
         self.model.soft_contact_ke = 1.0e3
-        self.model.soft_contact_kd = 0.0
+        self.model.soft_contact_kd = 10.0
         self.model.soft_contact_kf = 1.0e3
 
-        self.integrator = wp.sim.SemiImplicitIntegrator()
+        # self.integrator = wp.sim.SemiImplicitIntegrator()
+        self.integrator = wp.sim.XPBDIntegrator()
 
         self.state_0 = self.model.state()
         self.state_1 = self.model.state()
@@ -79,7 +80,7 @@ class Example:
         with wp.ScopedTimer("simulate", active=True):
             if self.sim_time <= 10.0:
                 self.state_0.body_q.assign(
-                    [[-1.0+self.sim_time/10.0, 2.5, 0.25, 0., 0., 0., 1.]]
+                    [[-1.0+self.sim_time/20.0, 2.5, 0.25, 0., 0., 0., 1.]]
                 )
 
             for s in range(self.sim_substeps):
@@ -97,7 +98,7 @@ class Example:
             # NOTE: state_0 current state, state_1 output state
             compute_contact_forces(self.model, self.state_0, self.state_1)
             
-            # self.touch_seq.save(self.sim_time, self.model, self.state_1)
+            self.touch_seq.save(self.sim_time, self.model, self.state_1)
 
     def render(self, is_live=False):
         with wp.ScopedTimer("render", active=True):
