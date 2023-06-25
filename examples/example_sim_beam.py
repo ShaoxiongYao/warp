@@ -23,6 +23,25 @@ from touch_utils import compute_contact_forces, TouchSeq
 
 wp.init()
 
+@wp.kernel
+def damp_vel_kernel(qd: wp.array(dtype=wp.vec3f), damp: wp.float32):
+    i = wp.tid()
+    qd[i] = qd[i] * damp
+
+config = {
+    'sim_substeps': 32,
+    'sim_duration': 20.0,
+    'density': 100.0,
+    'k_mu': 300000.0,
+    'k_lambda': 200000.0,
+    'k_damp': 10000.0,
+    'integrator': 'XPBD',
+    'soft_contact_ke': 1.0e3,
+    'soft_contact_kd': 10.0,    
+    'soft_contact_kf': 1.0e3,
+    'soft_contact_restitution': 0.1,
+    'vel_damp': 0.9
+}
 
 class Example:
     def __init__(self, stage, touch_seq: TouchSeq):
@@ -30,8 +49,8 @@ class Example:
         self.sim_height = 8
 
         self.sim_fps = 60.0
-        self.sim_substeps = 32
-        self.sim_duration = 20.0
+        self.sim_substeps = config['sim_substeps']
+        self.sim_duration = config['sim_duration']
         self.sim_frames = int(self.sim_duration * self.sim_fps)
         self.sim_dt = (1.0 / self.sim_fps) / self.sim_substeps
         self.sim_time = 0.0
@@ -51,10 +70,10 @@ class Example:
             cell_x=0.1,
             cell_y=0.1,
             cell_z=0.1,
-            density=100.0,
-            k_mu=500000.0,
-            k_lambda=200000.0,
-            k_damp=10000.0,
+            density=config['density'],
+            k_mu=config['k_mu'],
+            k_lambda=config['k_lambda'],
+            k_damp=config['k_damp'],
             fix_bottom=True
         )
 
@@ -63,12 +82,15 @@ class Example:
 
         self.model = builder.finalize()
         self.model.ground = True
-        self.model.soft_contact_ke = 1.0e3
-        self.model.soft_contact_kd = 10.0
-        self.model.soft_contact_kf = 1.0e3
+        self.model.soft_contact_ke = config['soft_contact_ke']
+        self.model.soft_contact_kd = config['soft_contact_kd']
+        self.model.soft_contact_kf = config['soft_contact_kf']
+        self.model.soft_contact_restitution = config['soft_contact_restitution']
 
-        # self.integrator = wp.sim.SemiImplicitIntegrator()
-        self.integrator = wp.sim.XPBDIntegrator()
+        if config['integrator'] == 'semi_implicit':
+            self.integrator = wp.sim.SemiImplicitIntegrator()
+        elif config['integrator'] == 'XPBD':
+            self.integrator = wp.sim.XPBDIntegrator()
 
         self.state_0 = self.model.state()
         self.state_1 = self.model.state()
@@ -92,6 +114,8 @@ class Example:
                 self.integrator.simulate(self.model, self.state_0, self.state_1, self.sim_dt)
                 self.sim_time += self.sim_dt
 
+                self.damp_vel(self.state_1, damp=0.99)
+
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
             
@@ -99,6 +123,14 @@ class Example:
             compute_contact_forces(self.model, self.state_0, self.state_1)
             
             self.touch_seq.save(self.sim_time, self.model, self.state_1)
+    
+    def damp_vel(self, state, damp):
+        wp.launch(
+            kernel=damp_vel_kernel,
+            dim=state.particle_qd.shape[0],
+            inputs=[state.particle_qd, damp],
+            device=self.model.device
+        )
 
     def render(self, is_live=False):
         with wp.ScopedTimer("render", active=True):
@@ -107,6 +139,9 @@ class Example:
             self.renderer.begin_frame(time)
             self.renderer.render(self.state_0)
             self.renderer.end_frame()
+    
+    def close(self):
+        self.touch_seq.end_seq(config=config)
 
 
 if __name__ == "__main__":
@@ -119,5 +154,4 @@ if __name__ == "__main__":
         example.update()
         example.render()
     
-    example.touch_seq.end_seq()
-
+    example.close()
