@@ -16,8 +16,7 @@ view_params = {
 
 
 if __name__ == '__main__':
-
-    touch_seq = TouchSeq(seq_id=1687638908)
+    touch_seq = TouchSeq(seq_id='1687751055')
 
     coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
 
@@ -67,5 +66,7 @@ if __name__ == '__main__':
     for i, n in enumerate(['x', 'y', 'z']):
         plt.plot(sim_time_lst[-len(tot_f_lst):],
                  [tot_f[i] for tot_f in tot_f_lst], label=f'f{n}')
+    plt.xlabel('simulation time (s)')
+    plt.ylabel('total force (N)')
     plt.legend()
     plt.show()
