@@ -42,7 +42,7 @@ class Example:
         self.sim_height = 8
 
         self.sim_fps = 60.0
-        self.sim_substeps = 64
+        self.sim_substeps = 128
         self.sim_duration = 20.0
         self.sim_frames = int(self.sim_duration * self.sim_fps)
         self.sim_dt = (1.0 / self.sim_fps) / self.sim_substeps
@@ -70,26 +70,7 @@ class Example:
             k_damp=200.0
         )
 
-        # usd_stage = Usd.Stage.Open(os.path.join(os.path.dirname(__file__), "assets/bunny.usd"))
-        # usd_geom = UsdGeom.Mesh(usd_stage.GetPrimAtPath("/bunny/bunny"))
-
-        # mesh_points = np.array(usd_geom.GetPointsAttr().Get())
-        # mesh_indices = np.array(usd_geom.GetFaceVertexIndicesAttr().Get())
-
-        # mesh = wp.sim.Mesh(mesh_points, mesh_indices)
-
-        # builder.add_shape_mesh(
-        #     body=-1,
-        #     mesh=mesh,
-        #     pos=(1.0, 0.0, 1.0),
-        #     rot=wp.quat_from_axis_angle((0.0, 1.0, 0.0), math.pi * 0.5),
-        #     scale=(2.0, 2.0, 2.0),
-        #     ke=1.0e2,
-        #     kd=1.0e2,
-        #     kf=1.0e1,
-        # )
-
-        b = builder.add_body(origin=wp.transform((0.0, 2.0, 0.0), wp.quat_identity()), m=0.0)
+        b = builder.add_body(origin=wp.transform((0.0, 1.5, 0.0), wp.quat_identity()), m=0.0)
         builder.add_shape_sphere(body=b, radius=0.75, density=0.0)
 
         self.model = builder.finalize()
@@ -108,18 +89,10 @@ class Example:
 
     def update(self):
         with wp.ScopedTimer("simulate", active=True):
-            # if self.sim_time <= 1.0:
-            #     self.state_0.body_q.assign(
-            #         [[0.5, 2.5-0.75*self.sim_time, 0.5, 0., 0., 0., 1.]]
-            #     )
-            # elif self.sim_time <= 10.0:
-            #     self.state_0.body_q.assign(
-            #         [[0.5, 1.75-0.25*(self.sim_time-1.0)/10.0, 0.5, 0., 0., 0., 1.]]
-            #     )
-            # else:
-            #     self.state_0.body_q.assign(
-            #         [[0.5, 1.75-0.25*9.0/10.0, 0.5, 0., 0., 0., 1.]]
-            #     )
+            if self.sim_time <= 10.0:
+                self.state_0.body_q.assign(
+                    [[0.0, 1.5-self.sim_time/10.0, 0.0, 0., 0., 0., 1.]]
+                )
 
             for s in range(self.sim_substeps):
                 wp.sim.collide(self.model, self.state_0)
@@ -131,7 +104,7 @@ class Example:
                 self.sim_time += self.sim_dt
 
                 # np.save('outputs/v1.npy', self.state_1.particle_qd.numpy())
-                self.damp_vel(self.state_1, damp=0.9)
+                self.damp_vel(self.state_1, damp=1.0)
                 # np.save('outputs/v2.npy', self.state_1.particle_qd.numpy())
 
                 # input()
@@ -139,9 +112,9 @@ class Example:
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
             
             # NOTE: state_0 current state, state_1 output state
-            # compute_contact_forces(self.model, self.state_0, self.state_1)
+            compute_contact_forces(self.model, self.state_0, self.state_1)
             
-            # self.touch_seq.save(self.sim_time, self.model, self.state_1)
+            self.touch_seq.save(self.sim_time, self.model, self.state_1)
 
     def damp_vel(self, state, damp):
         wp.launch(
