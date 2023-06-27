@@ -26,7 +26,7 @@ wp.init()
 @wp.kernel
 def damp_vel_kernel(qd: wp.array(dtype=wp.vec3f), damp: wp.float32):
     i = wp.tid()
-    qd[i] = qd[i] * damp
+    qd[i] = wp.mul(qd[i], damp)
 
 config = {
     'sim_substeps': 32,
@@ -40,7 +40,7 @@ config = {
     'soft_contact_kd': 10.0,    
     'soft_contact_kf': 1.0e3,
     'soft_contact_restitution': 0.1,
-    'vel_damp': 0.9
+    'vel_damp': 1.0
 }
 
 class Example:
