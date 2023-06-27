@@ -1,11 +1,18 @@
 import time
 import glob
+import json
 import numpy as np
 import pathlib
 
 import warp as wp
 from warp.sim.integrator_euler import eval_particle_contacts
 
+def sum_contact_forces(f, cid):
+    nz_cid = cid[cid != 0]
+    if nz_cid.shape[0] == 0:
+        return np.zeros(3)
+    else:
+        return f[nz_cid, :].sum(axis=0)
 
 def compute_contact_forces(model, state, out_state):
         
@@ -73,10 +80,15 @@ class TouchSeq:
         np.save(self.seq_dir + f'/particle_qd_{sim_time:07.3f}.npy', state.particle_qd.numpy())
         np.save(self.seq_dir + f'/particle_f_{sim_time:07.3f}.npy', state.particle_f.numpy())
         np.save(self.seq_dir + f'/contact_particle_{sim_time:07.3f}.npy', model.soft_contact_particle.numpy())
+        np.save(self.seq_dir + f'/contact_normal_{sim_time:07.3f}.npy', model.soft_contact_normal.numpy())
+        # np.save(self.seq_dir + f'/contact_pos_{sim_time:07.3f}.npy', model.soft_contact_particle.numpy())
 
         self.seq_len += 1
     
-    def end_seq(self):
+    def end_seq(self, config=None):
+        if config is not None:
+            with open(self.seq_dir + f'/config.json', 'w') as f:
+                json.dump(config, f, indent=2)
         np.save(self.seq_dir + f'/sim_time.npy', np.array(self.sim_time_lst))
     
     def load(self, idx):
@@ -88,5 +100,10 @@ class TouchSeq:
         cid = np.load(self.cid_fn_lst[idx])
 
         return sim_time, q, qd, f, cid
+    
+    def cus_load(self, idx, key):
+        sim_time = self.sim_time_lst[idx]
+        return np.load(self.seq_dir + f'/{key}_{sim_time:07.3f}.npy')
+
 
 
