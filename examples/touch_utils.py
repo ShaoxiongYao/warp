@@ -51,8 +51,11 @@ def compute_contact_forces(model, state, out_state):
 
 
 class TouchSeq:
-    def __init__(self, seq_dir="/media/motion/8AF1-B496/warp_data", seq_id=None) -> None:
+    def __init__(self, seq_dir="/media/motion/8AF1-B496/warp_data", seq_id=None, 
+                 data_keys=['particle_q', 'particle_qd', 'particle_f', 'contact_particle']) -> None:
         self.seq_dir = seq_dir
+        self.data_keys = data_keys
+
         if seq_id is None:
             self.seq_dir = self.seq_dir + f'/seq_{int(time.time())}'
             pathlib.Path(self.seq_dir).mkdir(parents=True, exist_ok=True)
@@ -62,26 +65,31 @@ class TouchSeq:
             self.seq_dir = self.seq_dir + f'/seq_{seq_id}'
             self.sim_time_lst = np.load(self.seq_dir + '/sim_time.npy').tolist()
 
-            self.q_fn_lst = sorted(glob.glob(self.seq_dir + '/particle_q_*.npy'))
-            self.qd_fn_lst = sorted(glob.glob(self.seq_dir + '/particle_qd_*.npy'))
-            self.f_fn_lst = sorted(glob.glob(self.seq_dir + '/particle_f_*.npy'))
-            self.cid_fn_lst = sorted(glob.glob(self.seq_dir + '/contact_particle_*.npy'))
+            self.dict_fn_lst = {}
+            for key in data_keys:
+                self.dict_fn_lst[key] = sorted(glob.glob(self.seq_dir + f'/{key}_*.npy'))
+                assert len(self.sim_time_lst) == len(self.dict_fn_lst[key])
 
-            assert len(self.q_fn_lst) == len(self.qd_fn_lst) == len(self.f_fn_lst) == len(self.cid_fn_lst)
-            self.seq_len = len(self.q_fn_lst)
+            self.seq_len = len(self.sim_time_lst)
     
     def __len__(self):
         return self.seq_len
 
     def save(self, sim_time, model, state):
         self.sim_time_lst.append(sim_time)
-        np.save(self.seq_dir + f'/body_q_{sim_time:07.3f}.npy', state.body_q.numpy())
-        np.save(self.seq_dir + f'/particle_q_{sim_time:07.3f}.npy', state.particle_q.numpy())
-        np.save(self.seq_dir + f'/particle_qd_{sim_time:07.3f}.npy', state.particle_qd.numpy())
-        np.save(self.seq_dir + f'/particle_f_{sim_time:07.3f}.npy', state.particle_f.numpy())
-        np.save(self.seq_dir + f'/contact_particle_{sim_time:07.3f}.npy', model.soft_contact_particle.numpy())
-        np.save(self.seq_dir + f'/contact_normal_{sim_time:07.3f}.npy', model.soft_contact_normal.numpy())
-        # np.save(self.seq_dir + f'/contact_pos_{sim_time:07.3f}.npy', model.soft_contact_particle.numpy())
+
+        if 'body_q' in self.data_keys:
+            np.save(self.seq_dir + f'/body_q_{sim_time:07.3f}.npy', state.body_q.numpy())
+        if 'particle_q' in self.data_keys:
+            np.save(self.seq_dir + f'/particle_q_{sim_time:07.3f}.npy', state.particle_q.numpy())
+        if 'particle_qd' in self.data_keys:
+            np.save(self.seq_dir + f'/particle_qd_{sim_time:07.3f}.npy', state.particle_qd.numpy())
+        if 'particle_f' in self.data_keys:
+            np.save(self.seq_dir + f'/particle_f_{sim_time:07.3f}.npy', state.particle_f.numpy())
+        if 'contact_particle' in self.data_keys:
+            np.save(self.seq_dir + f'/contact_particle_{sim_time:07.3f}.npy', model.soft_contact_particle.numpy())
+        if 'contact_normal' in self.data_keys:
+            np.save(self.seq_dir + f'/contact_normal_{sim_time:07.3f}.npy', model.soft_contact_normal.numpy())
 
         self.seq_len += 1
     
@@ -91,17 +99,17 @@ class TouchSeq:
                 json.dump(config, f, indent=2)
         np.save(self.seq_dir + f'/sim_time.npy', np.array(self.sim_time_lst))
     
-    def load(self, idx):
+    def load_all(self, idx):
         sim_time = self.sim_time_lst[idx]
 
-        q = np.load(self.q_fn_lst[idx])
-        qd = np.load(self.qd_fn_lst[idx])
-        f = np.load(self.f_fn_lst[idx])
-        cid = np.load(self.cid_fn_lst[idx])
+        data_lst = [sim_time]
+        for key in self.data_keys:
+            data_lst.append(self.load_by_key(idx, key))
 
-        return sim_time, q, qd, f, cid
+        return tuple(data_lst)
     
-    def cus_load(self, idx, key):
+    def load_by_key(self, idx, key):
+        assert key in self.data_keys
         sim_time = self.sim_time_lst[idx]
         return np.load(self.seq_dir + f'/{key}_{sim_time:07.3f}.npy')
 
