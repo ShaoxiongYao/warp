@@ -14,9 +14,11 @@ view_params = {
     "point_show_normal": True
 }
 
+state_keys = ['particle_q', 'particle_qd', 'particle_f', 'body_q', 'shape_transform']
+contact_keys = ['contact_particle', 'contact_normal', 'contact_body_pos']
 
 if __name__ == '__main__':
-    touch_seq = TouchSeq(seq_id='1687751055')
+    touch_seq = TouchSeq(seq_id='1687970050', data_keys=state_keys+contact_keys)
 
     coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
 
@@ -27,10 +29,14 @@ if __name__ == '__main__':
 
     tot_f_lst = []
 
+    # mesh = o3d.io.read_triangle_mesh('/home/motion/visual-tactile-model/assets/toy_bird_trimesh.ply')
+    triangles = np.load('outputs/toy_bird_triangles.npy')
+    fix_idx_ary = np.load('outputs/toy_bird_fix_idx_ary.npy')
 
     for idx in range(len(touch_seq)):
 
-        sim_time, q, qd, f, cid = touch_seq.load(idx)
+        sim_time, q, qd, f, body_q, body_sb = touch_seq.load_group(idx, state_keys)
+        _, cid, cn, cbp = touch_seq.load_group(idx, contact_keys)
 
         if prev_qd is not None:
             change_qd = np.linalg.norm(qd-prev_qd)
@@ -39,7 +45,6 @@ if __name__ == '__main__':
         prev_qd = qd
 
         nz_cid = cid[cid != 0]
-        print("number of contacts:", nz_cid.shape[0])
 
         if sim_time >= 0.0:
             if nz_cid.shape[0] != 0:
@@ -47,17 +52,34 @@ if __name__ == '__main__':
             else:
                 tot_f_lst.append(np.zeros(3))
 
-        # if idx % 30 == 0:
-        #     pcd = o3d.geometry.PointCloud()
-        #     pcd.points = o3d.utility.Vector3dVector(q)
-        #     pcd.normals = o3d.utility.Vector3dVector(1*f)
+        if idx % 100 == -1:
+            body_pcd = o3d.geometry.PointCloud()
+            body_pcd.points = o3d.utility.Vector3dVector(cbp[cid != 0, :] + body_q[0, :3])
 
-        #     colors = np.zeros((q.shape[0], 3))
-        #     colors[:, :] = [0.0, 0.0, 1.0]
-        #     colors[nz_cid, :] = [1.0, 0.0, 0.0]
-        #     pcd.colors = o3d.utility.Vector3dVector(colors)
+            print("pts pen:", np.linalg.norm(cbp[cid != 0, :]-q[nz_cid, :], axis=1))
 
-        #     o3d.visualization.draw_geometries([coord_frame, pcd], **view_params)
+            dr = cbp[cid != 0, :]-q[nz_cid, :]
+
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(q)
+            normals = np.zeros((q.shape[0], 3))
+            normals[nz_cid, :] = -cn[cid != 0, :]
+            print("nz cn:", np.linalg.norm(cn[cid != 0, :], axis=1))
+            pcd.normals = o3d.utility.Vector3dVector(normals)
+
+            mesh = o3d.geometry.TriangleMesh()
+            mesh.vertices = o3d.utility.Vector3dVector(q)
+            mesh.triangles = o3d.utility.Vector3iVector(triangles)
+            mesh.compute_vertex_normals()
+
+            colors = np.zeros((q.shape[0], 3))
+            colors[:, :] = [0.0, 0.0, 1.0]
+            colors[nz_cid, :] = [1.0, 0.0, 0.0]
+            colors[fix_idx_ary, :] = [0.0, 1.0, 0.0]
+            pcd.colors = o3d.utility.Vector3dVector(colors)
+            
+            # o3d.visualization.draw_geometries([body_pcd, coord_frame])
+            o3d.visualization.draw_geometries([mesh, coord_frame, body_pcd, pcd], **view_params)
     
     plt.plot(sim_time_lst[1:], change_qd_lst, label=r'$\Delta ||v||$')
     plt.legend()
@@ -68,5 +90,6 @@ if __name__ == '__main__':
                  [tot_f[i] for tot_f in tot_f_lst], label=f'f{n}')
     plt.xlabel('simulation time (s)')
     plt.ylabel('total force (N)')
+    # plt.savefig('outputs/contact_toy_forces.png')
     plt.legend()
     plt.show()
