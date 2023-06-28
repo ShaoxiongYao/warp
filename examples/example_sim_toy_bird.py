@@ -69,7 +69,7 @@ class Example:
         self.model = builder.finalize()
         self.model.ground = True
         self.model.soft_contact_ke = 1.0e3
-        self.model.soft_contact_kd = 0.0
+        self.model.soft_contact_kd = 1.0e3
         self.model.soft_contact_kf = 1.0e3
         self.model.soft_contact_margin = 0.01
 
@@ -114,10 +114,15 @@ class Example:
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
             
-            # self.damp_vel(self.state_0, damp=0.0)
+            tmp_state = self.model.state()
+            tmp_state.particle_q.assign(self.state_0.particle_q)
+            tmp_state.body_q.assign(self.state_0.body_q)
+
+            self.state_0.clear_forces()
+            self.state_1.clear_forces()
 
             # NOTE: state_0 current state, state_1 output state
-            compute_contact_forces(self.model, self.state_0, self.state_1)
+            compute_contact_forces(self.model, tmp_state, self.state_1)
             
             self.touch_seq.save(self.sim_time, self.model, self.state_1)
 
