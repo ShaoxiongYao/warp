@@ -29,21 +29,14 @@ def damp_vel_kernel(qd: wp.array(dtype=wp.vec3f), damp: wp.float32):
     i = wp.tid()
     qd[i] = wp.mul(qd[i], damp)
 
-    # qd[i][0] = wp.clamp(qd[i][0], -0.0, 0.0)
-    # qd[i][1] = wp.clamp(qd[i][1], -0.0, 0.0)
-    # qd[i][2] = wp.clamp(qd[i][2], -0.0, 0.0)
-    # qd[i][0] = 0.0
-    # qd[i][1] = 0.0
-    # qd[i][2] = 0.0
-
 class Example:
-    def __init__(self, stage, touch_seq: TouchSeq):
+    def __init__(self, stage='default.usd', touch_seq: TouchSeq=None):
         self.sim_width = 8
         self.sim_height = 8
 
         self.sim_fps = 60.0
         self.sim_substeps = 128
-        self.sim_duration = 20.0
+        self.sim_duration = 10.0
         self.sim_frames = int(self.sim_duration * self.sim_fps)
         self.sim_dt = (1.0 / self.sim_fps) / self.sim_substeps
         self.sim_time = 0.0
@@ -78,6 +71,19 @@ class Example:
         self.model.soft_contact_ke = 1.0e3
         self.model.soft_contact_kd = 0.0
         self.model.soft_contact_kf = 1.0e3
+        self.model.soft_contact_margin = 0.01
+
+        # setup fix points
+        pts_ary = self.model.particle_q.numpy()
+
+        min_y = pts_ary[:, 1].min()
+        fix_idx_ary = np.where(pts_ary[:, 1] < min_y + 0.05)[0]
+
+        # np.save('outputs/toy_bird_fix_idx_ary.npy', fix_idx_ary)
+
+        particle_mass = self.model.particle_mass.numpy()
+        particle_mass[fix_idx_ary] = 0.0
+        self.model.particle_mass = wp.array(particle_mass)
 
         self.integrator = wp.sim.SemiImplicitIntegrator()
 
@@ -103,14 +109,13 @@ class Example:
                 self.integrator.simulate(self.model, self.state_0, self.state_1, self.sim_dt)
                 self.sim_time += self.sim_dt
 
-                # np.save('outputs/v1.npy', self.state_1.particle_qd.numpy())
                 self.damp_vel(self.state_1, damp=1.0)
-                # np.save('outputs/v2.npy', self.state_1.particle_qd.numpy())
 
-                # input()
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
             
+            # self.damp_vel(self.state_0, damp=0.0)
+
             # NOTE: state_0 current state, state_1 output state
             compute_contact_forces(self.model, self.state_0, self.state_1)
             
@@ -132,12 +137,13 @@ class Example:
             self.renderer.render(self.state_0)
             self.renderer.end_frame()
 
+data_keys = ['particle_q', 'particle_qd', 'particle_f', 'body_q', 'shape_transform',
+             'contact_particle', 'contact_normal', 'contact_body_pos']
 
 if __name__ == "__main__":
-    stage_path = os.path.join(os.path.dirname(__file__), "outputs/example_sim_rigid_fem.usd")
 
-    # touch_seq = TouchSeq()
-    example = Example(stage_path, None)
+    touch_seq = TouchSeq(data_keys=data_keys)
+    example = Example(touch_seq=touch_seq)
 
     for i in range(example.sim_frames):
         example.update()
