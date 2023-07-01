@@ -44,7 +44,7 @@ class Example:
         self.sim_iterations = 1
         self.sim_relaxation = 1.0
 
-        builder = wp.sim.ModelBuilder(gravity=-0.0)
+        builder = wp.sim.ModelBuilder(gravity=-10.0)
         builder.default_particle_radius = 0.01
 
         # points:np.ndarray = np.load("/home/motion/visual-tactile-model/assets/toy_bird_points.npy")
@@ -64,9 +64,9 @@ class Example:
             scale=0.05,
             vertices=points,
             indices=elements.flatten(),
-            density=1000.,
-            k_mu=5000.0,
-            k_lambda=4000.0,
+            density=100.,
+            k_mu=50000.0,
+            k_lambda=40000.0,
             k_damp=200.0
         )
 
