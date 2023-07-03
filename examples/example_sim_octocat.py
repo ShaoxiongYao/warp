@@ -106,17 +106,18 @@ class Example:
         self.model.soft_contact_kf = 1.0e3
         self.model.soft_contact_margin = 0.01
 
-        # # setup fix points
-        # pts_ary = self.model.particle_q.numpy()
+        # setup fix points
+        pts_ary = self.model.particle_q.numpy()
 
-        # min_y = pts_ary[:, 1].min()
-        # fix_idx_ary = np.where(pts_ary[:, 1] < min_y + 0.05)[0]
+        min_y = pts_ary[:, 1].min()
+        fix_idx_ary = np.where(pts_ary[:, 1] < min_y + 0.05)[0]
 
-        # # np.save('outputs/toy_bird_fix_idx_ary.npy', fix_idx_ary)
-
-        # particle_mass = self.model.particle_mass.numpy()
-        # particle_mass[fix_idx_ary] = 0.0
-        # self.model.particle_mass = wp.array(particle_mass)
+        particle_mass = self.model.particle_mass.numpy()
+        particle_inv_mass = self.model.particle_inv_mass.numpy()
+        particle_mass[fix_idx_ary] = 0.0
+        particle_inv_mass[fix_idx_ary] = 0.0
+        self.model.particle_mass = wp.array(particle_mass)
+        self.model.particle_inv_mass = wp.array(particle_inv_mass)
 
         # self.integrator = wp.sim.SemiImplicitIntegrator()
         self.integrator = wp.sim.XPBDIntegrator(iterations=10)
@@ -148,17 +149,17 @@ class Example:
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
             
-            # tmp_state = self.model.state()
-            # tmp_state.particle_q.assign(self.state_0.particle_q)
-            # tmp_state.body_q.assign(self.state_0.body_q)
+            tmp_state = self.model.state()
+            tmp_state.particle_q.assign(self.state_0.particle_q)
+            tmp_state.body_q.assign(self.state_0.body_q)
 
-            # self.state_0.clear_forces()
-            # self.state_1.clear_forces()
+            self.state_0.clear_forces()
+            self.state_1.clear_forces()
 
             # NOTE: state_0 current state, state_1 output state
-            # compute_contact_forces(self.model, tmp_state, self.state_1)
+            compute_contact_forces(self.model, tmp_state, self.state_1)
             
-            # self.touch_seq.save(self.sim_time, self.model, self.state_1)
+            self.touch_seq.save(self.sim_time, self.model, self.state_1)
 
     def damp_vel(self, state, damp):
         wp.launch(

@@ -27,7 +27,7 @@ state_keys = ['particle_q', 'particle_qd', 'particle_f', 'body_q', 'shape_transf
 contact_keys = ['contact_particle', 'contact_normal', 'contact_body_pos']
 
 if __name__ == '__main__':
-    touch_seq = TouchSeq(seq_id='1688397429', data_keys=state_keys+contact_keys)
+    touch_seq = TouchSeq(seq_id='1688398348', data_keys=state_keys+contact_keys)
 
     coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
 
