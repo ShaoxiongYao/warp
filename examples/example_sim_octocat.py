@@ -82,7 +82,6 @@ class Example:
 
         print("points max:", points.max(axis=0))
         print("points min:", points.min(axis=0))
-        input()
 
         builder.add_soft_mesh(
             pos=(0.0, 0.01, 0.0),
@@ -97,8 +96,8 @@ class Example:
             k_damp=200.0
         )
 
-        # b = builder.add_body(origin=wp.transform((0.0, 1.5, 0.0), wp.quat_identity()), m=0.0)
-        # builder.add_shape_sphere(body=b, radius=0.75, density=0.0)
+        b = builder.add_body(origin=wp.transform((0.0, 2.5, 0.0), wp.quat_identity()), m=0.0)
+        builder.add_shape_sphere(body=b, radius=0.75, density=0.0)
 
         self.model = builder.finalize()
         self.model.ground = True
@@ -130,10 +129,10 @@ class Example:
 
     def update(self):
         with wp.ScopedTimer("simulate", active=True):
-            # if self.sim_time <= 10.0:
-            #     self.state_0.body_q.assign(
-            #         [[0.0, 1.5-self.sim_time/10.0, 0.0, 0., 0., 0., 1.]]
-            #     )
+            if self.sim_time <= 10.0:
+                self.state_0.body_q.assign(
+                    [[0.0, 2.5-self.sim_time/10.0, 0.0, 0., 0., 0., 1.]]
+                )
 
             for s in range(self.sim_substeps):
                 wp.sim.collide(self.model, self.state_0)
