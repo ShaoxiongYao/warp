@@ -52,10 +52,37 @@ class Example:
         # elements:np.ndarray = np.load("/home/motion/visual-tactile-model/assets/toy_bird_elements.npy")
 
         tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/32770_tetmesh.msh')
-        # tet_mesh.plot()
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/37384_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/1624039_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/100388_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/116878_tetmesh.msh') # ???
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/116863_tetmesh.msh') # ???
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/126660_tetmesh.msh') 
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/70558_tetmesh.msh') 
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/353686_tetmesh.msh') 
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/78976_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/65414_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/69930_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/76947_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/110699_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/285606_tetmesh.msh')
+
+        # ??? Not sure why not falling with gravity, scale=5.0
+        # tet_mesh = pv.read('/home/motion/Downloads/rws_plant_tet_.msh') 
+        
+        tet_mesh.plot()
 
         points = tet_mesh.points
+        # points -= np.mean(points, axis=0) 
+        points += np.array([0.0, 0.0, 1.0])
         elements = tet_mesh.cells.reshape(-1, 5)[:, 1:]
+
+        print("number of points:", points.shape)
+        print("number of elements:", elements.shape)
+
+        print("points max:", points.max(axis=0))
+        print("points min:", points.min(axis=0))
+        input()
 
         builder.add_soft_mesh(
             pos=(0.0, 0.01, 0.0),
