@@ -51,8 +51,8 @@ class Example:
         # points -= np.mean(points, axis=0)
         # elements:np.ndarray = np.load("/home/motion/visual-tactile-model/assets/toy_bird_elements.npy")
 
-        tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/32770_tetmesh.msh')
-        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/37384_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/32770_tetmesh.msh')
+        tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/37384_tetmesh.msh')
         # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/1624039_tetmesh.msh')
         # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/100388_tetmesh.msh')
         # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/116878_tetmesh.msh') # ???
@@ -96,7 +96,7 @@ class Example:
             k_damp=200.0
         )
 
-        b = builder.add_body(origin=wp.transform((0.0, 2.5, 0.0), wp.quat_identity()), m=0.0)
+        b = builder.add_body(origin=wp.transform((0.0, 10.0, 0.0), wp.quat_identity()), m=0.0)
         builder.add_shape_sphere(body=b, radius=0.75, density=0.0)
 
         self.model = builder.finalize()
@@ -110,7 +110,10 @@ class Example:
         pts_ary = self.model.particle_q.numpy()
 
         min_y = pts_ary[:, 1].min()
+        max_y = pts_ary[:, 1].max()
         fix_idx_ary = np.where(pts_ary[:, 1] < min_y + 0.05)[0]
+
+        self.init_y = max_y + 0.75 + 0.2
 
         particle_mass = self.model.particle_mass.numpy()
         particle_inv_mass = self.model.particle_inv_mass.numpy()
@@ -132,7 +135,7 @@ class Example:
         with wp.ScopedTimer("simulate", active=True):
             if self.sim_time <= 10.0:
                 self.state_0.body_q.assign(
-                    [[0.0, 2.5-self.sim_time/10.0, 0.0, 0., 0., 0., 1.]]
+                    [[0.0, self.init_y-self.sim_time/10.0, 0.0, 0., 0., 0., 1.]]
                 )
 
             for s in range(self.sim_substeps):
