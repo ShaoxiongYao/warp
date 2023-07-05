@@ -29,7 +29,7 @@ def damp_vel_kernel(qd: wp.array(dtype=wp.vec3f), damp: wp.float32):
     qd[i] = wp.mul(qd[i], damp)
 
 config = {
-    'sim_substeps': 32,
+    'sim_substeps': 16,
     'sim_duration': 20.0,
     'density': 100.0,
     'k_mu': 100000.0,
@@ -38,7 +38,7 @@ config = {
     'integrator': 'XPBD',
     'soft_contact_ke': 1.0e3,
     'soft_contact_kd': 10.0,    
-    'soft_contact_kf': 1.0e3,
+    'soft_contact_kf': 0.0,
     'soft_contact_restitution': 0.1,
     'vel_damp': 1.0
 }
@@ -86,11 +86,12 @@ class Example:
         self.model.soft_contact_kd = config['soft_contact_kd']
         self.model.soft_contact_kf = config['soft_contact_kf']
         self.model.soft_contact_restitution = config['soft_contact_restitution']
+        self.model.soft_contact_margin = 0.01
 
         if config['integrator'] == 'semi_implicit':
             self.integrator = wp.sim.SemiImplicitIntegrator()
         elif config['integrator'] == 'XPBD':
-            self.integrator = wp.sim.XPBDIntegrator()
+            self.integrator = wp.sim.XPBDIntegrator(iterations=10)
 
         self.state_0 = self.model.state()
         self.state_1 = self.model.state()
@@ -102,7 +103,7 @@ class Example:
         with wp.ScopedTimer("simulate", active=True):
             if self.sim_time <= 10.0:
                 self.state_0.body_q.assign(
-                    [[-1.0+self.sim_time/20.0, 2.5, 0.25, 0., 0., 0., 1.]]
+                    [[-1.0+self.sim_time/10.0, 2.5, 0.5, 0., 0., 0., 1.]]
                 )
 
             for s in range(self.sim_substeps):
@@ -114,13 +115,21 @@ class Example:
                 self.integrator.simulate(self.model, self.state_0, self.state_1, self.sim_dt)
                 self.sim_time += self.sim_dt
 
-                self.damp_vel(self.state_1, damp=0.99)
+                self.damp_vel(self.state_1, damp=0.9)
 
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
             
+            self.state_0.clear_forces()
+            self.state_1.clear_forces()
+
+            tmp_state = self.model.state()
+            tmp_state.particle_q.assign(self.state_0.particle_q)
+            tmp_state.body_q.assign(self.state_0.body_q)
+
+            
             # NOTE: state_0 current state, state_1 output state
-            compute_contact_forces(self.model, self.state_0, self.state_1)
+            compute_contact_forces(self.model, tmp_state, self.state_1)
             
             self.touch_seq.save(self.sim_time, self.model, self.state_1)
     
@@ -147,7 +156,10 @@ class Example:
 if __name__ == "__main__":
     stage_path = os.path.join(os.path.dirname(__file__), "outputs/example_sim_rigid_fem.usd")
 
-    touch_seq = TouchSeq()
+    state_keys = ['particle_q', 'particle_qd', 'particle_f', 'body_q', 'shape_transform']
+    contact_keys = ['contact_particle', 'contact_normal', 'contact_body_pos']
+
+    touch_seq = TouchSeq(data_keys=state_keys+contact_keys)
     example = Example(stage_path, touch_seq)
 
     for i in range(example.sim_frames):
