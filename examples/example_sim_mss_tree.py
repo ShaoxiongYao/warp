@@ -21,6 +21,9 @@ import numpy as np
 import warp as wp
 import open3d as o3d
 
+import matplotlib.pyplot as plt
+from sklearn.neighbors import kneighbors_graph
+
 import warp.sim
 import warp.sim.render
 from warp.sim.integrator_euler import compute_forces
@@ -65,7 +68,7 @@ class Example:
         # verts = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 1.0]])
         # indices = [0, 1, 2, 1, 2, 3]
 
-        out_geom = o3d.io.read_triangle_mesh("/home/motion/sparse_tree_tri_mesh.ply")
+        out_geom = o3d.io.read_triangle_mesh("/home/motion/tree_models/sparse_tree_tri_mesh.ply")
         out_geom.compute_vertex_normals()
         out_geom.remove_degenerate_triangles()
         print("number of triangles:", len(out_geom.triangles))
@@ -90,23 +93,46 @@ class Example:
         #     edge_kd=100000.0,
         # )
         
-        verts *= 1.0
+        verts *= 0.5
         verts[:, [1, 2]] = verts[:, [2, 1]]
+        verts[:, 1] += 0.5
 
         for i in range(verts.shape[0]):
             builder.add_particle(pos=verts[i], vel=(0.0, 0.0, 0.0), mass=1000.0, radius=0.001)
 
-        for tri in np.array(out_geom.triangles):
-            if np.linalg.norm(verts[tri[0]] - verts[tri[1]]) > 1e-3:
-                builder.add_spring(tri[0], tri[1], ke=0.0, kd=1.0, control=0.0)
-            if np.linalg.norm(verts[tri[1]] - verts[tri[2]]) > 1e-3:
-                builder.add_spring(tri[1], tri[2], ke=0.0, kd=1.0, control=0.0)
-            if np.linalg.norm(verts[tri[0]] - verts[tri[2]]) > 1e-3:
-                builder.add_spring(tri[0], tri[2], ke=0.0, kd=1.0, control=0.0)
+        A_mat = kneighbors_graph(verts, n_neighbors=20, include_self=False)
+            
+        row_counts = A_mat.indptr[1:] - A_mat.indptr[:-1]
+        row_idx_lst = np.repeat(np.arange(len(row_counts)), row_counts)
+        col_idx_lst = A_mat.indices
+
+        springs_idx_lst = []
+        for row_idx, col_idx in zip(row_idx_lst, col_idx_lst):
+            if np.linalg.norm(verts[row_idx, :] - verts[col_idx, :]) > 1e-3:
+                springs_idx_lst.append([row_idx, col_idx])
+                builder.add_spring(row_idx, col_idx, ke=100000.0, kd=1.0, control=0.0)
+        print("number of springs:", len(springs_idx_lst))
+        
+        # for tri in np.array(out_geom.triangles):
+
+        #     if np.linalg.norm(verts[tri[0]] - verts[tri[1]]) > 1e-3:
+        #         springs_idx_lst.append([tri[0], tri[1]])
+        #         builder.add_spring(tri[0], tri[1], ke=100000.0, kd=1.0, control=0.0)
+        #     if np.linalg.norm(verts[tri[1]] - verts[tri[2]]) > 1e-3:
+        #         springs_idx_lst.append([tri[1], tri[2]])
+        #         builder.add_spring(tri[1], tri[2], ke=100000.0, kd=1.0, control=0.0)
+        #     if np.linalg.norm(verts[tri[0]] - verts[tri[2]]) > 1e-3:
+        #         springs_idx_lst.append([tri[0], tri[2]])
+        #         builder.add_spring(tri[0], tri[2], ke=100000.0, kd=1.0, control=0.0)
             # builder.add_triangle(tri[0], tri[1], tri[2]) 
                                 #  tri_ke=100000.0, tri_ka=100000.0, tri_kd=100000.0)
+    
+        line_set = o3d.geometry.LineSet()
+        line_set.points = o3d.utility.Vector3dVector(verts)
+        line_set.lines = o3d.utility.Vector2iVector(springs_idx_lst)
+        o3d.visualization.draw_geometries([line_set])
 
-        b = builder.add_body(origin=wp.transform((-2.0, 1.5, 0.0), wp.quat_identity()), m=0.0)
+        b = builder.add_body(origin=wp.transform((-2.0, 3.5, 0.0), wp.quat_identity()), m=0.0)
         builder.add_shape_sphere(body=b, radius=0.75, density=0.0)
 
         self.model = builder.finalize()
@@ -123,17 +149,16 @@ class Example:
 
         # o3d.visualization.draw_geometries([pcd, tri_mesh])
 
-        # self.integrator = wp.sim.SemiImplicitIntegrator()
-        self.integrator = wp.sim.XPBDIntegrator()
+        self.integrator = wp.sim.SemiImplicitIntegrator()
+        # self.integrator = wp.sim.XPBDIntegrator(iterations=10)
 
         self.state_0 = self.model.state()
         self.state_1 = self.model.state()
 
         compute_forces(self.model, self.state_0, self.state_0.particle_f, self.state_0.body_f, False)
-        np.save("particle_f.npy", self.state_0.particle_f.numpy())
-        print("particle f:", self.state_0.particle_f.numpy())
-        print("body f:", self.state_0.body_f.numpy())
-        input()
+        # print("particle f:", self.state_0.particle_f.numpy())
+        # print("body f:", self.state_0.body_f.numpy())
+        # input()
 
         print("init particle q:", self.state_0.particle_q.numpy())
 
@@ -143,10 +168,10 @@ class Example:
     def update(self):
         with wp.ScopedTimer("simulate", active=True):
             print("INFO: update")
-            # if self.sim_time <= 10.0:
-            #     self.state_0.body_q.assign(
-            #         [[-2.0 + self.sim_time/5.0, 1.5, 0.0, 0., 0., 0., 1.]]
-            #     )
+            if self.sim_time <= 10.0:
+                self.state_0.body_q.assign(
+                    [[-2.0 + self.sim_time/5.0, 1.5, 0.0, 0., 0., 0., 1.]]
+                )
 
             wp.sim.collide(self.model, self.state_0)
 
@@ -157,12 +182,12 @@ class Example:
 
                 # self.clamp_state(self.state_0, self.state_1)
 
-                print("state diff:", np.linalg.norm(self.state_0.particle_q.numpy() - self.state_1.particle_q.numpy()))
+                # print("state diff:", np.linalg.norm(self.state_0.particle_q.numpy() - self.state_1.particle_q.numpy()))
 
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
             
-            print("new state:", self.state_0.particle_q.numpy())
+            # print("new state:", self.state_0.particle_q.numpy())
             # input()
 
     def clamp_state(self, state0, state1):
