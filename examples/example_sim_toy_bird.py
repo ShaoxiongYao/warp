@@ -18,6 +18,7 @@ import os
 import math
 import warp as wp
 import warp.sim
+import pyvista as pv
 import warp.sim.render
 import numpy as np
 from pxr import Usd, UsdGeom
@@ -43,49 +44,57 @@ class Example:
         self.sim_iterations = 1
         self.sim_relaxation = 1.0
 
-        builder = wp.sim.ModelBuilder(gravity=-2.1)
+        builder = wp.sim.ModelBuilder(gravity=-0.0)
         builder.default_particle_radius = 0.01
 
-        points:np.ndarray = np.load("/home/motion/visual-tactile-model/assets/toy_bird_points.npy")
-        points -= np.mean(points, axis=0)
-        elements:np.ndarray = np.load("/home/motion/visual-tactile-model/assets/toy_bird_elements.npy")
+        # points:np.ndarray = np.load("/home/motion/visual-tactile-model/assets/toy_bird_points.npy")
+        # points -= np.mean(points, axis=0)
+        # elements:np.ndarray = np.load("/home/motion/visual-tactile-model/assets/toy_bird_elements.npy")
+
+        tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/32770_tetmesh.msh')
+        # tet_mesh.plot()
+
+        points = tet_mesh.points
+        elements = tet_mesh.cells.reshape(-1, 5)[:, 1:]
 
         builder.add_soft_mesh(
-            pos=(0.0, 0.3, 0.0),
+            pos=(0.0, 0.01, 0.0),
             rot=wp.quat_from_axis_angle([1.0, 0.0, 0.0], -np.pi/2),
             vel=(0.0, 0.0, 0.0),
-            scale=10.0,
+            scale=0.05,
             vertices=points,
             indices=elements.flatten(),
             density=1000.,
-            k_mu=500.0,
+            k_mu=5000.0,
             k_lambda=4000.0,
             k_damp=200.0
         )
 
-        b = builder.add_body(origin=wp.transform((0.0, 1.5, 0.0), wp.quat_identity()), m=0.0)
-        builder.add_shape_sphere(body=b, radius=0.75, density=0.0)
+        # b = builder.add_body(origin=wp.transform((0.0, 1.5, 0.0), wp.quat_identity()), m=0.0)
+        # builder.add_shape_sphere(body=b, radius=0.75, density=0.0)
 
         self.model = builder.finalize()
         self.model.ground = True
         self.model.soft_contact_ke = 1.0e3
-        self.model.soft_contact_kd = 1.0e3
+        self.model.soft_contact_kd = 0.0
         self.model.soft_contact_kf = 1.0e3
         self.model.soft_contact_margin = 0.01
 
-        # setup fix points
+        # # setup fix points
         pts_ary = self.model.particle_q.numpy()
+        print("min pts:", pts_ary.min(axis=0))
 
-        min_y = pts_ary[:, 1].min()
-        fix_idx_ary = np.where(pts_ary[:, 1] < min_y + 0.05)[0]
+        # min_y = pts_ary[:, 1].min()
+        # fix_idx_ary = np.where(pts_ary[:, 1] < min_y + 0.05)[0]
 
-        # np.save('outputs/toy_bird_fix_idx_ary.npy', fix_idx_ary)
+        # # np.save('outputs/toy_bird_fix_idx_ary.npy', fix_idx_ary)
 
-        particle_mass = self.model.particle_mass.numpy()
-        particle_mass[fix_idx_ary] = 0.0
-        self.model.particle_mass = wp.array(particle_mass)
+        # particle_mass = self.model.particle_mass.numpy()
+        # particle_mass[fix_idx_ary] = 0.0
+        # self.model.particle_mass = wp.array(particle_mass)
 
-        self.integrator = wp.sim.SemiImplicitIntegrator()
+        # self.integrator = wp.sim.SemiImplicitIntegrator()
+        self.integrator = wp.sim.XPBDIntegrator(iterations=10)
 
         self.state_0 = self.model.state()
         self.state_1 = self.model.state()
@@ -95,10 +104,10 @@ class Example:
 
     def update(self):
         with wp.ScopedTimer("simulate", active=True):
-            if self.sim_time <= 10.0:
-                self.state_0.body_q.assign(
-                    [[0.0, 1.5-self.sim_time/10.0, 0.0, 0., 0., 0., 1.]]
-                )
+            # if self.sim_time <= 10.0:
+            #     self.state_0.body_q.assign(
+            #         [[0.0, 1.5-self.sim_time/10.0, 0.0, 0., 0., 0., 1.]]
+            #     )
 
             for s in range(self.sim_substeps):
                 wp.sim.collide(self.model, self.state_0)
@@ -109,22 +118,22 @@ class Example:
                 self.integrator.simulate(self.model, self.state_0, self.state_1, self.sim_dt)
                 self.sim_time += self.sim_dt
 
-                self.damp_vel(self.state_1, damp=1.0)
+                # self.damp_vel(self.state_1, damp=1.0)
 
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
             
-            tmp_state = self.model.state()
-            tmp_state.particle_q.assign(self.state_0.particle_q)
-            tmp_state.body_q.assign(self.state_0.body_q)
+            # tmp_state = self.model.state()
+            # tmp_state.particle_q.assign(self.state_0.particle_q)
+            # tmp_state.body_q.assign(self.state_0.body_q)
 
-            self.state_0.clear_forces()
-            self.state_1.clear_forces()
+            # self.state_0.clear_forces()
+            # self.state_1.clear_forces()
 
             # NOTE: state_0 current state, state_1 output state
-            compute_contact_forces(self.model, tmp_state, self.state_1)
+            # compute_contact_forces(self.model, tmp_state, self.state_1)
             
-            self.touch_seq.save(self.sim_time, self.model, self.state_1)
+            # self.touch_seq.save(self.sim_time, self.model, self.state_1)
 
     def damp_vel(self, state, damp):
         wp.launch(
