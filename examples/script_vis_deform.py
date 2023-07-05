@@ -23,11 +23,11 @@ view_params = {
     "point_show_normal": True
 }
 
-state_keys = ['particle_q', 'particle_qd', 'particle_f', 'body_q', 'shape_transform']
+state_keys = ['particle_q', 'particle_qd', 'particle_f', 'body_q']
 contact_keys = ['contact_particle', 'contact_normal', 'contact_body_pos']
 
 if __name__ == '__main__':
-    touch_seq = TouchSeq(seq_id='1688398348', data_keys=state_keys+contact_keys)
+    touch_seq = TouchSeq(seq_id='1688478776', data_keys=state_keys)
 
     coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
 
@@ -38,8 +38,8 @@ if __name__ == '__main__':
 
     tot_f_lst = []
 
-    triangles = np.load('outputs/toy_bird_triangles.npy')
-    fix_idx_ary = np.load('outputs/toy_bird_fix_idx_ary.npy')
+    # triangles = np.load('outputs/toy_bird_triangles.npy')
+    # fix_idx_ary = np.load('outputs/toy_bird_fix_idx_ary.npy')
 
     for idx in range(len(touch_seq)):
         print("step index:", idx)
@@ -105,6 +105,6 @@ if __name__ == '__main__':
                  [tot_f[i] for tot_f in tot_f_lst], label=f'f{n}')
     plt.xlabel('simulation time (s)')
     plt.ylabel('total force (N)')
-    # plt.savefig('outputs/contact_toy_forces.png')
+    plt.savefig('outputs/contact_forces_touch1.png')
     plt.legend()
     plt.show()
