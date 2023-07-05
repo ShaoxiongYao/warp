@@ -67,6 +67,9 @@ class Example:
         self.model.soft_contact_kd = 0.0
         self.model.soft_contact_kf = 1.0e3
 
+        print("number of vertices:", self.model.particle_count)
+        print("number of tetrahedra:", self.model.tet_count)
+
         self.integrator = wp.sim.SemiImplicitIntegrator()
 
         self.state_0 = self.model.state()
@@ -102,6 +105,9 @@ class Example:
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
             
+            self.state_0.clear_forces()
+            self.state_1.clear_forces()
+
             # NOTE: state_0 current state, state_1 output state
             compute_contact_forces(self.model, self.state_0, self.state_1)
             
