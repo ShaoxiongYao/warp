@@ -90,6 +90,10 @@ class TouchSeq:
             np.save(self.seq_dir + f'/contact_particle_{sim_time:07.3f}.npy', model.soft_contact_particle.numpy())
         if 'contact_normal' in self.data_keys:
             np.save(self.seq_dir + f'/contact_normal_{sim_time:07.3f}.npy', model.soft_contact_normal.numpy())
+        if 'contact_body_pos' in self.data_keys:
+            np.save(self.seq_dir + f'/contact_body_pos_{sim_time:07.3f}.npy', model.soft_contact_body_pos.numpy())
+        if 'shape_transform' in self.data_keys:
+            np.save(self.seq_dir + f'/shape_transform_{sim_time:07.3f}.npy', model.shape_transform.numpy())
 
         self.seq_len += 1
     
@@ -99,11 +103,16 @@ class TouchSeq:
                 json.dump(config, f, indent=2)
         np.save(self.seq_dir + f'/sim_time.npy', np.array(self.sim_time_lst))
     
-    def load_all(self, idx):
+    def load_group(self, idx, with_sim_time=True, group_keys=None):
         sim_time = self.sim_time_lst[idx]
 
-        data_lst = [sim_time]
-        for key in self.data_keys:
+        data_lst = []
+        if with_sim_time:
+            data_lst.append(sim_time)
+        if group_keys is None:
+            group_keys = self.data_keys
+
+        for key in group_keys:
             data_lst.append(self.load_by_key(idx, key))
 
         return tuple(data_lst)
