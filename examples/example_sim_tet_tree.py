@@ -45,30 +45,33 @@ class Example:
         self.sim_iterations = 1
         self.sim_relaxation = 1.0
 
-        builder = wp.sim.ModelBuilder(gravity=-0.0)
+        builder = wp.sim.ModelBuilder(gravity=-1.0)
         builder.default_particle_radius = 0.001
 
-        # tet_mesh = pv.read('/home/motion/tet_tree.ply_.msh')
-        # # tet_mesh = pv.read('/home/motion/tet_palm_tree_.msh')
-        # tet_mesh.plot()
+        tet_mesh = pv.read('assets/tet_tree_example.msh')
+        # tet_mesh = pv.read('/home/motion/tet_palm_tree_.msh')
+        tet_mesh.plot()
 
-        # points = tet_mesh.points
-        # elements = tet_mesh.cells.reshape(-1, 5)[:, 1:]
+        points = tet_mesh.points
+        elements = tet_mesh.cells.reshape(-1, 5)[:, 1:]
 
-        points = np.load("/home/motion/tet_tree_fine_points.npy")
-        elements = np.load("/home/motion/tet_tree_fine_elements.npy")
+        # points = np.load("/home/motion/tet_tree_fine_points.npy")
+        # elements = np.load("/home/motion/tet_tree_fine_elements.npy")
+        # print("number of points:", len(points))
+        # print("number of elements:", len(elements))
+        # input()
 
         builder.add_soft_mesh(
             pos=(0.0, 0.1, 0.0),
             rot=wp.quat_from_axis_angle([1.0, 0.0, 0.0], -np.pi/2),
             vel=(0.0, 0.0, 0.0),
-            scale=1.0,
+            scale=0.5,
             vertices=points,
             indices=elements.flatten(),
-            density=500.,
-            k_mu=100000.0,
-            k_lambda=100000.0,
-            k_damp=10000.0
+            density=50.,
+            k_mu=2000.0,
+            k_lambda=20000.0,
+            k_damp=100.0
         )
 
         b = builder.add_body(origin=wp.transform((-1.0, 1.5, 0.0), wp.quat_identity()), m=0.0)
@@ -103,9 +106,7 @@ class Example:
         self.state_1 = self.model.state()
 
         compute_forces(self.model, self.state_0, self.state_0.particle_f, self.state_0.body_f, False)
-        # np.save("particle_f.npy", self.state_0.particle_f.numpy())
-        print("particle f:", self.state_0.particle_f.numpy())
-        input()
+        assert np.allclose(self.state_0.particle_f.numpy(), 0.0, rtol=1e-3, atol=1e-3)
 
         self.renderer = wp.sim.render.SimRendererOpenGL(self.model, stage, scaling=1.0)
         self.touch_seq = touch_seq
@@ -131,17 +132,17 @@ class Example:
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
             
-            # tmp_state = self.model.state()
-            # tmp_state.particle_q.assign(self.state_0.particle_q)
-            # tmp_state.body_q.assign(self.state_0.body_q)
+            tmp_state = self.model.state()
+            tmp_state.particle_q.assign(self.state_0.particle_q)
+            tmp_state.body_q.assign(self.state_0.body_q)
 
-            # self.state_0.clear_forces()
-            # self.state_1.clear_forces()
+            self.state_0.clear_forces()
+            self.state_1.clear_forces()
 
             # NOTE: state_0 current state, state_1 output state
-            # compute_contact_forces(self.model, tmp_state, self.state_1)
+            compute_contact_forces(self.model, tmp_state, self.state_1)
             
-            # self.touch_seq.save(self.sim_time, self.model, self.state_1)
+            self.touch_seq.save(self.sim_time, self.model, self.state_1)
 
     def damp_vel(self, state, damp):
         wp.launch(
