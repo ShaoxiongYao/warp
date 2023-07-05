@@ -27,7 +27,7 @@ wp.init()
 class Example:
     frame_dt = 1.0 / 100.0
 
-    episode_duration = 5.0  # seconds
+    episode_duration = 20.0  # seconds
     episode_frames = int(episode_duration / frame_dt)
 
     sim_substeps = 32  # 5
@@ -42,14 +42,13 @@ class Example:
         self.chain_width = 1.0
         self.chain_types = [
             wp.sim.JOINT_REVOLUTE,
-            wp.sim.JOINT_FIXED,
             wp.sim.JOINT_BALL,
             wp.sim.JOINT_UNIVERSAL,
             wp.sim.JOINT_COMPOUND,
         ]
 
         self.enable_rendering = render
-        builder = wp.sim.ModelBuilder()
+        builder = wp.sim.ModelBuilder(gravity=10.0)
 
         for c, t in enumerate(self.chain_types):
             # start a new articulation
@@ -141,7 +140,7 @@ class Example:
         # set up Usd renderer
         self.renderer = None
         if render:
-            self.renderer = wp.sim.render.SimRenderer(self.model, stage, scaling=20.0)
+            self.renderer = wp.sim.render.SimRendererOpenGL(self.model, stage, scaling=1.0)
 
     def update(self):
         for _ in range(self.sim_substeps):
