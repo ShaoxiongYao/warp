@@ -51,9 +51,9 @@ class Example:
         # points -= np.mean(points, axis=0)
         # elements:np.ndarray = np.load("/home/motion/visual-tactile-model/assets/toy_bird_elements.npy")
 
-        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/32770_tetmesh.msh')
-        tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/37384_tetmesh.msh')
-        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/1624039_tetmesh.msh')
+        tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/32770_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/37384_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/1624039_tetmesh.msh') # default cannot reach
         # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/100388_tetmesh.msh')
         # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/116878_tetmesh.msh') # ???
         # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/116863_tetmesh.msh') # ???
@@ -64,11 +64,13 @@ class Example:
         # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/65414_tetmesh.msh')
         # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/69930_tetmesh.msh')
         # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/76947_tetmesh.msh')
-        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/110699_tetmesh.msh')
-        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/285606_tetmesh.msh')
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/110699_tetmesh.msh') # required 128 frames
+        # tet_mesh = pv.read('/home/motion/Downloads/10k_tetmesh/285606_tetmesh.msh') # required 128 frames
 
         # ??? Not sure why not falling with gravity, scale=5.0
         # tet_mesh = pv.read('/home/motion/Downloads/rws_plant_tet_.msh') 
+
+        # tet_mesh = pv.read('/home/motion/Downloads/pillow_.msh') # required 128 frames
         
         tet_mesh.plot()
 
@@ -113,7 +115,7 @@ class Example:
         max_y = pts_ary[:, 1].max()
         fix_idx_ary = np.where(pts_ary[:, 1] < min_y + 0.05)[0]
 
-        self.init_y = max_y + 0.75 + 0.2
+        self.init_y = max_y + 0.75 + 0.1
 
         particle_mass = self.model.particle_mass.numpy()
         particle_inv_mass = self.model.particle_inv_mass.numpy()
@@ -131,12 +133,10 @@ class Example:
         self.renderer = wp.sim.render.SimRendererOpenGL(self.model, stage, scaling=1.0)
         self.touch_seq = touch_seq
 
-    def update(self):
-        with wp.ScopedTimer("simulate", active=True):
-            if self.sim_time <= 10.0:
-                self.state_0.body_q.assign(
-                    [[0.0, self.init_y-self.sim_time/10.0, 0.0, 0., 0., 0., 1.]]
-                )
+        self.use_capture_graph = True
+
+        if self.use_capture_graph:
+            wp.capture_begin()
 
             for s in range(self.sim_substeps):
                 wp.sim.collide(self.model, self.state_0)
@@ -151,6 +151,33 @@ class Example:
 
                 # swap states
                 (self.state_0, self.state_1) = (self.state_1, self.state_0)
+
+            self.graph = wp.capture_end()
+
+    def update(self):
+        with wp.ScopedTimer("simulate", active=True):
+            if self.sim_time <= 10.0:
+                self.state_0.body_q.assign(
+                    [[0.0, self.init_y-self.sim_time/10.0, 0.0, 0., 0., 0., 1.]]
+                )
+
+            if self.use_capture_graph:
+                wp.capture_launch(self.graph)
+                self.sim_time += self.sim_dt*self.sim_substeps
+
+            else:
+                for s in range(self.sim_substeps):
+                    wp.sim.collide(self.model, self.state_0)
+
+                    self.state_0.clear_forces()
+                    self.state_1.clear_forces()
+
+                    self.integrator.simulate(self.model, self.state_0, self.state_1, self.sim_dt)
+
+                    # self.damp_vel(self.state_1, damp=1.0)
+
+                    # swap states
+                    (self.state_0, self.state_1) = (self.state_1, self.state_0)
             
             tmp_state = self.model.state()
             tmp_state.particle_q.assign(self.state_0.particle_q)
