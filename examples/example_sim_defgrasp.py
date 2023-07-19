@@ -51,7 +51,7 @@ class Example:
         # points -= np.mean(points, axis=0)
         # elements:np.ndarray = np.load("/home/motion/visual-tactile-model/assets/toy_bird_elements.npy")
 
-        tet_mesh = pv.read('/home/yaosx/Downloads/dgn_dataset/6polygon01/6polygon01.msh')
+        tet_mesh = pv.read('/home/yaosx/Downloads/dgn_dataset/apple1/apple1.msh')
 
         tet_mesh.plot()
 
@@ -70,12 +70,12 @@ class Example:
             pos=(0.0, 0.01, 0.0),
             rot=wp.quat_from_axis_angle([1.0, 0.0, 0.0], -np.pi/2),
             vel=(0.0, 0.0, 0.0),
-            scale=100.0,
+            scale=10.0,
             vertices=points,
             indices=elements.flatten(),
             density=100.,
-            k_mu=50000.0,
-            k_lambda=40000.0,
+            k_mu=5000.0,
+            k_lambda=4000.0,
             k_damp=200.0
         )
 
