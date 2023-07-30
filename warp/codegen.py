@@ -67,7 +67,6 @@ def get_annotations(obj: Any) -> Mapping[str, Any]:
     return getattr(obj, "__annotations__", {})
 
 
-
 def struct_instance_repr_recursive(inst: StructInstance, depth: int) -> str:
     indent = "\t"
 
@@ -93,9 +92,7 @@ def struct_instance_repr_recursive(inst: StructInstance, depth: int) -> str:
 
 
 class StructInstance:
-    
     def __init__(self, cls: Struct, ctype):
-
         super().__setattr__("_cls", cls)
 
         # maintain a c-types object for the top-level instance the struct
@@ -113,14 +110,12 @@ class StructInstance:
             else:
                 self.__dict__[field] = var.type()
 
-
     def __setattr__(self, name, value):
-
         if name not in self._cls.vars:
             raise RuntimeError(f"Trying to set Warp struct attribute that does not exist {name}")
 
         var = self._cls.vars[name]
-        
+
         # update our ctype flat copy
         if isinstance(var.type, array):
             if value is None:
@@ -129,26 +124,29 @@ class StructInstance:
             else:
                 # wp.array
                 assert isinstance(value, array)
-                assert (
-                    value.dtype == var.type.dtype
+                assert types_equal(
+                    value.dtype, var.type.dtype
                 ), "assign to struct member variable {} failed, expected type {}, got type {}".format(
-                    name, var.type.dtype, value.dtype
+                    name, type_repr(var.type.dtype), type_repr(value.dtype)
                 )
                 setattr(self._ctype, name, value.__ctype__())
-
 
         elif isinstance(var.type, Struct):
             # assign structs by-value, otherwise we would have problematic cases transferring ownership
             # of the underlying ctypes data between shared Python struct instances
 
             if not isinstance(value, StructInstance):
-                raise RuntimeError(f"Trying to assign a non-structure value to a struct attribute with type: {self._cls.key}")
+                raise RuntimeError(
+                    f"Trying to assign a non-structure value to a struct attribute with type: {self._cls.key}"
+                )
 
             # destination attribution on self
             dest = getattr(self, name)
 
             if dest._cls.key is not value._cls.key:
-                raise RuntimeError(f"Trying to assign a structure of type {value._cls.key} to an attribute of {self._cls.key}")
+                raise RuntimeError(
+                    f"Trying to assign a structure of type {value._cls.key} to an attribute of {self._cls.key}"
+                )
 
             # update all nested ctype vars by deep copy
             for n in dest._cls.vars:
@@ -156,7 +154,6 @@ class StructInstance:
 
             # early return to avoid updating our Python StructInstance
             return
-
 
         elif issubclass(var.type, ctypes.Array):
             # vector/matrix type, e.g. vec3
@@ -173,23 +170,57 @@ class StructInstance:
             if value is None:
                 # zero initialize
                 setattr(self._ctype, name, var.type._type_())
-            elif hasattr(value, "_type_"):
-                # assigning value warp type directly (e.g.: wp.float32)
-                setattr(self._ctype, name, value.value)
             else:
-                # assigning Python type, e.g.: 1.5, convert to struct attribute type
-                setattr(self._ctype, name, var.type._type_(value))
-
+                if hasattr(value, "_type_"):
+                    # assigning warp type value (e.g.: wp.float32)
+                    value = value.value
+                # float16 needs conversion to uint16 bits
+                if var.type == warp.float16:
+                    setattr(self._ctype, name, float_to_half_bits(value))
+                else:
+                    setattr(self._ctype, name, value)
 
         # update Python instance
         super().__setattr__(name, value)
-
 
     def __ctype__(self):
         return self._ctype
 
     def __repr__(self):
         return struct_instance_repr_recursive(self, 0)
+
+    # type description used in numpy structured arrays
+    def numpy_dtype(self):
+        return self._cls.numpy_dtype()
+
+    # value usable in numpy structured arrays of .numpy_dtype(), e.g. (42, 13.37, [1.0, 2.0, 3.0])
+    def numpy_value(self):
+        npvalue = []
+        for name, var in self._cls.vars.items():
+            # get the attribute value
+            value = getattr(self._ctype, name)
+
+            if isinstance(var.type, array):
+                # array_t
+                npvalue.append(value.numpy_value())
+            elif isinstance(var.type, Struct):
+                # nested struct
+                npvalue.append(value.numpy_value())
+            elif issubclass(var.type, ctypes.Array):
+                if len(var.type._shape_) == 1:
+                    # vector
+                    npvalue.append(list(value))
+                else:
+                    # matrix
+                    npvalue.append([list(row) for row in value])
+            else:
+                # scalar
+                if var.type == warp.float16:
+                    npvalue.append(half_bits_to_float(value))
+                else:
+                    npvalue.append(value)
+
+        return tuple(npvalue)
 
 
 class Struct:
@@ -273,6 +304,68 @@ class Struct:
 
     def initializer(self):
         return self.default_constructor
+
+    # return structured NumPy dtype, including field names, formats, and offsets
+    def numpy_dtype(self):
+        names = []
+        formats = []
+        offsets = []
+        for name, var in self.vars.items():
+            names.append(name)
+            offsets.append(getattr(self.ctype, name).offset)
+            if isinstance(var.type, array):
+                # array_t
+                formats.append(array_t.numpy_dtype())
+            elif isinstance(var.type, Struct):
+                # nested struct
+                formats.append(var.type.numpy_dtype())
+            elif issubclass(var.type, ctypes.Array):
+                scalar_typestr = type_typestr(var.type._wp_scalar_type_)
+                if len(var.type._shape_) == 1:
+                    # vector
+                    formats.append(f"{var.type._length_}{scalar_typestr}")
+                else:
+                    # matrix
+                    formats.append(f"{var.type._shape_}{scalar_typestr}")
+            else:
+                # scalar
+                formats.append(type_typestr(var.type))
+
+        return {"names": names, "formats": formats, "offsets": offsets, "itemsize": ctypes.sizeof(self.ctype)}
+
+    # constructs a Warp struct instance from a pointer to the ctype
+    def from_ptr(self, ptr):
+        if not ptr:
+            raise RuntimeError("NULL pointer exception")
+
+        # create a new struct instance
+        instance = self()
+
+        for name, var in self.vars.items():
+            offset = getattr(self.ctype, name).offset
+            if isinstance(var.type, array):
+                # We could reconstruct wp.array from array_t, but it's problematic.
+                # There's no guarantee that the original wp.array is still allocated and
+                # no easy way to make a backref.
+                # Instead, we just create a stub annotation, which is not a fully usable array object.
+                setattr(instance, name, array(dtype=var.type.dtype, ndim=var.type.ndim))
+            elif isinstance(var.type, Struct):
+                # nested struct
+                value = var.type.from_ptr(ptr + offset)
+                setattr(instance, name, value)
+            elif issubclass(var.type, ctypes.Array):
+                # vector/matrix
+                value = var.type.from_ptr(ptr + offset)
+                setattr(instance, name, value)
+            else:
+                # scalar
+                cvalue = ctypes.cast(ptr + offset, ctypes.POINTER(var.type._type_)).contents
+                if var.type == warp.float16:
+                    setattr(instance, name, half_bits_to_float(cvalue))
+                else:
+                    setattr(instance, name, cvalue.value)
+
+        return instance
 
 
 def compute_type_str(base_name, template_params):
@@ -1164,63 +1257,90 @@ class Adjoint:
             else:
                 return False
 
+    # detects whether a loop contains a break (or continue) statement
+    def contains_break(adj, body):
+        for s in body:
+            if isinstance(s, ast.Break):
+                return True
+            elif isinstance(s, ast.Continue):
+                return True
+            elif isinstance(s, ast.If):
+                if adj.contains_break(s.body):
+                    return True
+                if adj.contains_break(s.orelse):
+                    return True
+            else:
+                # note that nested for or while loops containing a break statement
+                # do not affect the current loop
+                pass
+
+        return False
+
+    # returns a constant range() if unrollable, otherwise None
+    def get_unroll_range(adj, loop):
+        if not isinstance(loop.iter, ast.Call) or loop.iter.func.id != "range":
+            return None
+
+        for a in loop.iter.args:
+            # if all range() arguments are numeric constants we will unroll
+            # note that this only handles trivial constants, it will not unroll
+            # constant compile-time expressions e.g.: range(0, 3*2)
+            if not adj.is_num(a):
+                return None
+
+        # range(end)
+        if len(loop.iter.args) == 1:
+            start = 0
+            end = adj.eval_num(loop.iter.args[0])
+            step = 1
+
+        # range(start, end)
+        elif len(loop.iter.args) == 2:
+            start = adj.eval_num(loop.iter.args[0])
+            end = adj.eval_num(loop.iter.args[1])
+            step = 1
+
+        # range(start, end, step)
+        elif len(loop.iter.args) == 3:
+            start = adj.eval_num(loop.iter.args[0])
+            end = adj.eval_num(loop.iter.args[1])
+            step = adj.eval_num(loop.iter.args[2])
+
+        # test if we're above max unroll count
+        max_iters = abs(end - start) // abs(step)
+        max_unroll = adj.builder.options["max_unroll"]
+
+        if max_iters > max_unroll:
+            if warp.config.verbose:
+                print(
+                    f"Warning: fixed-size loop count of {max_iters} is larger than the module 'max_unroll' limit of {max_unroll}, will generate dynamic loop."
+                )
+            return None
+
+        if adj.contains_break(loop.body):
+            if warp.config.verbose:
+                print("Warning: 'break' or 'continue' found in loop body, will generate dynamic loop.")
+            return None
+
+        # unroll
+        return range(start, end, step)
+
     def emit_For(adj, node):
         # try and unroll simple range() statements that use constant args
-        unrolled = False
+        unroll_range = adj.get_unroll_range(node)
 
-        if isinstance(node.iter, ast.Call) and node.iter.func.id == "range":
-            is_constant = True
-            for a in node.iter.args:
-                # if all range() arguments are numeric constants we will unroll
-                # note that this only handles trivial constants, it will not unroll
-                # constant compile-time expressions e.g.: range(0, 3*2)
-                if not adj.is_num(a):
-                    is_constant = False
-                    break
+        if unroll_range:
+            for i in unroll_range:
+                const_iter = adj.add_constant(i)
+                var_iter = adj.add_call(warp.context.builtin_functions["int"], [const_iter])
+                adj.symbols[node.target.id] = var_iter
 
-            if is_constant:
-                # range(end)
-                if len(node.iter.args) == 1:
-                    start = 0
-                    end = adj.eval_num(node.iter.args[0])
-                    step = 1
+                # eval body
+                for s in node.body:
+                    adj.eval(s)
 
-                # range(start, end)
-                elif len(node.iter.args) == 2:
-                    start = adj.eval_num(node.iter.args[0])
-                    end = adj.eval_num(node.iter.args[1])
-                    step = 1
-
-                # range(start, end, step)
-                elif len(node.iter.args) == 3:
-                    start = adj.eval_num(node.iter.args[0])
-                    end = adj.eval_num(node.iter.args[1])
-                    step = adj.eval_num(node.iter.args[2])
-
-                # test if we're above max unroll count
-                max_iters = abs(end - start) // abs(step)
-                max_unroll = adj.builder.options["max_unroll"]
-
-                if max_iters > max_unroll:
-                    if warp.config.verbose:
-                        print(
-                            f"Warning: fixed-size loop count of {max_iters} is larger than the module 'max_unroll' limit of {max_unroll}, will generate dynamic loop."
-                        )
-                else:
-                    # unroll
-                    for i in range(start, end, step):
-                        const_iter = adj.add_constant(i)
-                        var_iter = adj.add_call(warp.context.builtin_functions["int"], [const_iter])
-                        adj.symbols[node.target.id] = var_iter
-
-                        # eval body
-                        for s in node.body:
-                            adj.eval(s)
-
-                    unrolled = True
-
-        # couldn't unroll so generate a dynamic loop
-        if not unrolled:
+        # otherwise generate a dynamic loop
+        else:
             # evaluate the Iterable
             iter = adj.eval(node.iter)
 
@@ -1640,7 +1760,7 @@ class Adjoint:
 
 cpu_module_header = """
 #define WP_NO_CRT
-#include "../native/builtin.h"
+#include "builtin.h"
 
 // avoid namespacing of float type for casting to float type, this is to avoid wp::float(x), which is not valid in C++
 #define float(x) cast_float(x)
@@ -1655,7 +1775,7 @@ using namespace wp;
 
 cuda_module_header = """
 #define WP_NO_CRT
-#include "../native/builtin.h"
+#include "builtin.h"
 
 // avoid namespacing of float type for casting to float type, this is to avoid wp::float(x), which is not valid in C++
 #define float(x) cast_float(x)
@@ -1679,7 +1799,7 @@ struct {name}
     {{
     }}
 
-    {name}& operator += (const {name}&) {{ return *this; }}
+    CUDA_CALLABLE {name}& operator += (const {name}&) {{ return *this; }}
 
 }};
 

@@ -169,6 +169,19 @@ def quat_from_matrix(m):
     return normalize(np.array([x, y, z, w]))
 
 
+@wp.func
+def quat_between_vectors(a: wp.vec3, b: wp.vec3) -> wp.quat:
+    """
+    Compute the quaternion that rotates vector a to vector b
+    """
+    a = wp.normalize(a)
+    b = wp.normalize(b)
+    c = wp.cross(a, b)
+    d = wp.dot(a, b)
+    q = wp.quat(c[0], c[1], c[2], 1.0 + d)
+    return wp.normalize(q)
+
+
 # rigid body transform
 
 
@@ -828,29 +841,6 @@ def lame_parameters(E, nu):
     mu = E / (2.0 * (1.0 + nu))
 
     return (l, mu)
-
-
-# **Deprecated: use ScopedDevice instead
-# ensures that correct CUDA is set for the guards lifetime
-# restores the previous CUDA context on exit
-class ScopedCudaGuard:
-    def __init__(self):
-        import warnings
-
-        warnings.warn("ScopedCudaGuard is deprecated, use ScopedDevice instead")
-
-        if wp.context.runtime.cuda_devices:
-            self.device = wp.context.runtime.initial_cuda_device
-        else:
-            self.device = None
-
-    def __enter__(self):
-        if self.device is not None:
-            self.device.context_guard.__enter__()
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if self.device is not None:
-            self.device.context_guard.__exit__(exc_type, exc_value, traceback)
 
 
 class ScopedDevice:
