@@ -131,7 +131,7 @@ class Example:
             # NOTE: state_0 current state, state_1 output state
             compute_contact_forces(self.model, tmp_state, self.state_1)
             
-            self.touch_seq.save(self.sim_time, self.model, self.state_1)
+            # self.touch_seq.save(self.sim_time, self.model, self.state_1)
     
     def damp_vel(self, state, damp):
         wp.launch(
@@ -159,8 +159,8 @@ if __name__ == "__main__":
     state_keys = ['particle_q', 'particle_qd', 'particle_f', 'body_q', 'shape_transform']
     contact_keys = ['contact_particle', 'contact_normal', 'contact_body_pos']
 
-    touch_seq = TouchSeq(data_keys=state_keys+contact_keys)
-    example = Example(stage_path, touch_seq)
+    # touch_seq = TouchSeq(data_keys=state_keys+contact_keys)
+    example = Example(stage_path, touch_seq=None)
 
     for i in range(example.sim_frames):
         example.update()
